@@ -1,0 +1,28 @@
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.AppleDouble
+.LSOverride
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Logs
+*.log
+
+# Editoren
+*.swp
+*.bak
+*~
+.idea/
+.vscode/
