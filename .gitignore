@@ -17,6 +17,11 @@ __pycache__/
 dist/
 build/
 
+# KOOS-eigener Embedding-Index (koos_embed.py) — Vektoren sind groß und
+# reproduzierbar (python3 koos_embed.py baut ihn aus _daten/ neu), gehört
+# nicht ins Git, analog zu ChromaDB-Indizes an anderer Stelle im Projekt.
+.koos-embed/
+
 # Logs
 *.log
 

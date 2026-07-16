@@ -131,7 +131,10 @@ def parse_prozess_md(dateiname: str, text: str) -> dict:
         ],
         "daten":       meta.get("daten", {"input": [], "output": [], "datenspeicher": []}),
         "regelungen":  meta.get("regelungen", []),
+        "leika_id":    meta.get("leika_id"),
+        "ozg_id":      meta.get("ozg_id"),
         "schritte":    schritte,
+        "letzte_aktualisierung": meta.get("letzte-aktualisierung", ""),
     }
 
 
@@ -146,10 +149,22 @@ def parse_prozess_body(text: str) -> str:
 
 def prozess_to_md(prozess: dict) -> str:
     """Serialisiert ein Prozess-Dict zurück als Markdown-Datei mit Frontmatter."""
-    # _dateiname ist internes Feld, nicht in die Datei schreiben
-    data = {k: v for k, v in prozess.items() if not k.startswith("_")}
+    # _dateiname und body sind interne/gesondert behandelte Felder, nicht ins Frontmatter.
+    # schritte werden ausschließlich im Markdown-Body geführt (## Prozessschritte), nicht
+    # zusätzlich im Frontmatter — sonst entsteht eine Dublette bei jedem Round-Trip über
+    # parse_prozess_md() (das schritte defensiv aus dem Body nachlädt, wenn im Frontmatter leer).
+    _INTERN = {"_dateiname", "body", "schritte"}
+    data = {k: v for k, v in prozess.items() if k not in _INTERN and not k.startswith("_")}
+    if "letzte_aktualisierung" in data:
+        data["letzte-aktualisierung"] = data.pop("letzte_aktualisierung")
+    # leika_id/ozg_id sind optional — wenn nicht gesetzt, nicht als "null" ins YAML schreiben,
+    # außer sie waren zuvor explizit vorhanden (dann bleibt der leere Zustand nachvollziehbar)
     frontmatter = yaml.dump(data, allow_unicode=True, default_flow_style=False, sort_keys=False)
-    return f"---\n{frontmatter}---\n"
+    body = prozess.get("body", "")
+    result = f"---\n{frontmatter}---\n"
+    if body:
+        result += f"\n{body}\n"
+    return result
 
 
 # ── Rechtsgrundlagen-Normalisierung ──────────────────────────────────────────
@@ -339,6 +354,147 @@ def daten_to_md_merge(incoming: dict, existing_path: "Path | None" = None) -> st
     frontmatter = yaml.dump(
         orig_meta, allow_unicode=True, default_flow_style=False, sort_keys=False
     )
+    result = f"---\n{frontmatter}---\n"
+    if body:
+        result += f"\n{body}\n"
+    return result
+
+
+# ── vvt/*.md ──────────────────────────────────────────────────────────────────
+
+def _id_liste(werte: list) -> list[str]:
+    """Normalisiert eine Liste von {id: x}-Dicts oder rohen Strings zu Strings."""
+    ergebnis = []
+    for eintrag in (werte or []):
+        if isinstance(eintrag, dict):
+            eid = eintrag.get("id", "")
+            if eid:
+                ergebnis.append(eid)
+        elif isinstance(eintrag, str) and eintrag:
+            ergebnis.append(eintrag)
+    return ergebnis
+
+
+def parse_vvt_md(dateiname: str, text: str) -> dict:
+    """
+    Parst eine VVT-Markdown-Datei (vvt-<uid>.md) und gibt ein strukturiertes
+    Dict zurück. Analog zu parse_daten_md()/parse_prozess_md().
+    """
+    meta, body = parse_frontmatter(text)
+    return {
+        "id":                     meta.get("id", dateiname),
+        "_dateiname":             dateiname,
+        "uid":                    str(meta.get("uid", "")),
+        "titel":                  meta.get("titel", ""),
+        "status":                 meta.get("status", "aktiv"),
+        "organisationseinheit":   meta.get("organisationseinheit", ""),
+        "zweck":                  meta.get("zweck", ""),
+        "rechtsgrundlage":        meta.get("rechtsgrundlage", ""),
+        "kategorien_betroffener": meta.get("kategorien_betroffener", ""),
+        "kategorien_daten":       meta.get("kategorien_daten", ""),
+        "datenspeicher":          _id_liste(meta.get("datenspeicher")),
+        "empfaenger":             meta.get("empfaenger", ""),
+        "transfer_drittland":     meta.get("transfer_drittland", ""),
+        "loeschfrist":            meta.get("loeschfrist", ""),
+        "tom":                    _id_liste(meta.get("tom")),
+        "leika_id":               meta.get("leika_id"),
+        "ozg_id":                 meta.get("ozg_id"),
+        "software_verarbeitungsmittel": meta.get("software_verarbeitungsmittel", ""),
+        "prozesse":               _id_liste(meta.get("prozesse")),
+        "quelle_basis_id":        meta.get("quelle-basis-id"),
+        "letzte_aktualisierung":  meta.get("letzte-aktualisierung", ""),
+        "body":                   body,
+    }
+
+
+def lade_alle_vvt(vvt_dir: Path) -> list[dict]:
+    """Liest alle *.md-Dateien aus vvt/ und gibt eine sortierte Liste zurück."""
+    key = f"vvt:{vvt_dir}"
+    cached = _cache_get(key)
+    if cached is not None:
+        return cached
+    ergebnisse = []
+    if not vvt_dir.is_dir():
+        return ergebnisse
+    for datei in vvt_dir.glob("*.md"):
+        text = datei.read_text(encoding="utf-8")
+        ergebnisse.append(parse_vvt_md(datei.stem, text))
+    ergebnisse.sort(key=lambda v: v["uid"])
+    _cache_set(key, ergebnisse)
+    return ergebnisse
+
+
+# Schutzstufen-Rangfolge nach LfD Niedersachsen (A niedrigste, E höchste)
+_SCHUTZSTUFE_RANG = {"A": 0, "B": 1, "C": 2, "D": 3, "E": 4}
+
+
+def leite_schutzstufe_ab(vvt_eintrag: dict, alle_daten: list[dict]) -> dict:
+    """
+    Leitet die Schutzstufe eines VVT-Eintrags aus den verknüpften dstore-*
+    ab (Mischbestandsregel 3.5.1 der Richtlinie zur Datenklassifizierung:
+    höchste enthaltene Stufe gilt für das gesamte Objekt — Maximum-Regel).
+    Liest die Schutzstufe NICHT vom VVT-Eintrag selbst — der VVT-Eintrag
+    trägt keine eigene Schutzstufe, sie wird stets abgeleitet.
+    """
+    daten_by_id = {d["id"]: d for d in alle_daten}
+    gefunden: list[dict] = []
+    fehlend: list[str] = []
+    for ds_id in vvt_eintrag.get("datenspeicher", []):
+        d = daten_by_id.get(ds_id)
+        if d is None:
+            fehlend.append(ds_id)
+        else:
+            gefunden.append(d)
+
+    stufen = [d.get("schutzstufe") for d in gefunden if d.get("schutzstufe") in _SCHUTZSTUFE_RANG]
+    if stufen:
+        max_stufe = max(stufen, key=lambda s: _SCHUTZSTUFE_RANG[s])
+    else:
+        max_stufe = None
+
+    return {
+        "schutzstufe_abgeleitet": max_stufe,
+        "aus_dstore": [d["id"] for d in gefunden if d.get("schutzstufe") == max_stufe] if max_stufe else [],
+        "dstore_ohne_schutzstufe": [d["id"] for d in gefunden if d.get("schutzstufe") not in _SCHUTZSTUFE_RANG],
+        "dstore_nicht_gefunden": fehlend,
+    }
+
+
+def validiere_vvt_referenzen(vvt_eintrag: dict, alle_prozesse: list[dict], alle_daten: list[dict]) -> dict:
+    """
+    Prüft, ob die in prozesse: und datenspeicher: referenzierten IDs
+    tatsächlich existierende proc-*/dstore-*-Dateien sind ("verwaiste
+    Referenzen"). Reine Prüfung, keine Änderung.
+    """
+    prozess_ids = {p["id"] for p in alle_prozesse}
+    daten_ids   = {d["id"] for d in alle_daten}
+
+    verwaiste_prozesse = [pid for pid in vvt_eintrag.get("prozesse", []) if pid not in prozess_ids]
+    verwaiste_daten     = [did for did in vvt_eintrag.get("datenspeicher", []) if did not in daten_ids]
+
+    return {
+        "gueltig": not verwaiste_prozesse and not verwaiste_daten,
+        "verwaiste_prozesse": verwaiste_prozesse,
+        "verwaiste_datenspeicher": verwaiste_daten,
+    }
+
+
+def vvt_to_md(vvt: dict) -> str:
+    """Serialisiert ein VVT-Dict zurück als Markdown-Datei mit Frontmatter."""
+    _INTERN = {"_dateiname", "body"}
+    meta = {k: v for k, v in vvt.items() if k not in _INTERN and not k.startswith("_")}
+
+    if "datenspeicher" in meta:
+        meta["datenspeicher"] = [{"id": x} for x in meta["datenspeicher"]]
+    if "prozesse" in meta:
+        meta["prozesse"] = list(meta["prozesse"])
+    if "quelle_basis_id" in meta:
+        meta["quelle-basis-id"] = meta.pop("quelle_basis_id")
+    if "letzte_aktualisierung" in meta:
+        meta["letzte-aktualisierung"] = meta.pop("letzte_aktualisierung")
+
+    frontmatter = yaml.dump(meta, allow_unicode=True, default_flow_style=False, sort_keys=False)
+    body = vvt.get("body", "")
     result = f"---\n{frontmatter}---\n"
     if body:
         result += f"\n{body}\n"

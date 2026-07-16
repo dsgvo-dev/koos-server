@@ -29,6 +29,7 @@ GIT_AUTHOR_EMAIL: str = os.environ.get("KOOS_GIT_AUTHOR_EMAIL", "koos@localhost"
 PROZESSE_DIR:   Path = DATA_DIR / "prozesse"
 DATEN_DIR:      Path = DATA_DIR / "daten"
 REGELUNGEN_DIR: Path = DATA_DIR / "regelungen"
+VVT_DIR:        Path = DATA_DIR / "vvt"
 ORGA_FILE:      Path = DATA_DIR / "orga.yaml"
 
 # Pfad zur GUI (index.html) — liegt standardmäßig im Server-Verzeichnis
