@@ -400,8 +400,14 @@ async def list_tools() -> list[types.Tool]:
         ),
         types.Tool(
             name="koos_search_prozess",
-            description="Suche Verwaltungsprozesse nach Name, OE oder "
-                        "Datenart.",
+            description="Suche konkrete Verwaltungsprozesse dieser Verwaltung nach "
+                        "Name, OE oder Datenart (z. B. 'Wohngeld beantragen', "
+                        "'Kfz-Zulassung'). Liefert die für DIESEN Prozess bereits "
+                        "geprüfte, verbindliche Zuordnung (OE, Datenarten, VVT-Bezug). "
+                        "Bei Fragen zu einem konkreten Prozess maßgeblicher als die "
+                        "allgemeine Rechtslage aus dsms-knowledge/search_knowledge — "
+                        "beide Server ergänzen sich, bei Prozessfragen zusätzlich hier "
+                        "nachsehen, nicht nur allgemein herleiten.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -420,8 +426,15 @@ async def list_tools() -> list[types.Tool]:
         ),
         types.Tool(
             name="koos_search_daten",
-            description="Suche Datenarten nach Name, Kategorie oder "
-                        "Schutzstufe.",
+            description="Suche Datenarten nach Name, Kategorie oder Schutzstufe. "
+                        "Liefert die für diese Verwaltung bereits fachlich geprüfte, "
+                        "verbindliche Schutzstufen-Klassifizierung (A-E) konkreter "
+                        "Datenarten inkl. Rechtsgrundlage und Löschfrist — das ist "
+                        "die maßgebliche, projektspezifische Einstufung. Kann von "
+                        "einer allgemeinen Herleitung aus dem abstrakten "
+                        "Schutzstufenkonzept (dsms-knowledge) abweichen; bei Fragen "
+                        "zu konkreten Datenarten (z. B. 'Wohngeld-Einkommensdaten') "
+                        "diesem Tool den Vorrang geben.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -438,8 +451,12 @@ async def list_tools() -> list[types.Tool]:
             name="koos_search_vvt",
             description="Suche VVT-Einträge (Verzeichnis von Verarbeitungs"
                         "tätigkeiten) nach Titel/Zweck, OE oder verknüpftem "
-                        "Prozess. Liefert Rechtsgrundlage, Datenkategorien, "
-                        "Löschfrist, Leika-/OZG-ID.",
+                        "Prozess. Liefert die bereits dokumentierte, verbindliche "
+                        "Rechtsgrundlage, Datenkategorien, Löschfrist und "
+                        "Leika-/OZG-ID für einen konkreten Verwaltungsprozess. "
+                        "Bei Fragen zu einem konkreten Prozess (z. B. Wohngeld) "
+                        "maßgeblicher als eine allgemeine Herleitung aus "
+                        "dsms-knowledge.",
             inputSchema={
                 "type": "object",
                 "properties": {
