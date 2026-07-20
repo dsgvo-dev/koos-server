@@ -215,7 +215,7 @@ class KoosLoader:
             "regelungen": p.get("regelungen", []),
             "leika_id": p.get("leika_id"),
             "ozg_id": p.get("ozg_id"),
-            "letzteAktualisierung": p.get("letzte-aktualisierung"),
+            "letzteAktualisierung": str(p.get("letzte-aktualisierung", "")),
         }
 
     def _format_vvt(self, v: dict[str, Any]) -> dict[str, Any]:
@@ -245,7 +245,7 @@ class KoosLoader:
             "software_verarbeitungsmittel": v.get("software_verarbeitungsmittel"),
             "leika_id": v.get("leika_id"),
             "ozg_id": v.get("ozg_id"),
-            "letzteAktualisierung": v.get("letzte-aktualisierung"),
+            "letzteAktualisierung": str(v.get("letzte-aktualisierung", "")),
             # tom/empfaenger: bereits am 20.07.2026 nachgezogen (waren im
             # Rohdatensatz längst vorhanden, wurden aber von diesem
             # Formatter verschluckt).
