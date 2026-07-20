@@ -304,6 +304,51 @@ class KoosLoader:
             results.append(formatted)
         return results
 
+    def _format_regelung(self, r: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "id": r.get("id"),
+            "name": r.get("name"),
+            "typ": r.get("typ"),
+            "status": r.get("status", "aktiv"),
+            "datum": str(r["datum"]) if r.get("datum") else None,
+            "zustaendigeEinheit": r.get("zustaendigeEinheit") or r.get("zuständige-einheit"),
+            "entscheidendesGremium": r.get("entscheidendesGremium") or r.get("entscheidendes-gremium"),
+            "ersetzt": r.get("ersetzt"),
+            "kontext": r.get("kontext"),
+            "entscheidung": r.get("entscheidung"),
+            "auszug": (r.get("body") or "")[:500],
+        }
+
+    def search_regelung(self, query: str = "", typ: str | None = None,
+                        zustaendige_einheit: str | None = None) -> list[dict[str, Any]]:
+        """Regelungen (Dienstanweisungen, Satzungen, Geschäftsordnungen) suchen.
+
+        Bislang nicht als MCP-Tool angebunden, obwohl der Loader die Daten
+        schon lädt (self.regelungen) und eine eigene REST-Route existiert
+        (_server/routers/regelungen.py) — nachgezogen am 20.07.2026, nachdem
+        ein realer Test zeigte, dass z. B. die Dienstanweisung zur
+        E-Mail-Nutzung (reg-da-e-mail-001) über MCP nicht auffindbar war.
+        """
+        results = []
+        q = query.lower()
+        for r in self.regelungen:
+            name = str(r.get("name", "")).lower()
+            rid = str(r.get("id", "")).lower()
+            kontext = str(r.get("kontext", "")).lower()
+            entscheidung = str(r.get("entscheidung", "")).lower()
+            body = str(r.get("body", "")).lower()
+            if q and not any(
+                q in feld for feld in (name, rid, kontext, entscheidung, body)
+            ):
+                continue
+            formatted = self._format_regelung(r)
+            if typ and (formatted["typ"] or "").lower() != typ.lower():
+                continue
+            if zustaendige_einheit and formatted["zustaendigeEinheit"] != zustaendige_einheit:
+                continue
+            results.append(formatted)
+        return results
+
     def get_context(self, oe_id: str) -> dict[str, Any]:
         """Gesamtkontext einer OE."""
         oes = self.search_oe(query=oe_id)
@@ -434,7 +479,9 @@ async def list_tools() -> list[types.Tool]:
                         "einer allgemeinen Herleitung aus dem abstrakten "
                         "Schutzstufenkonzept (dsms-knowledge) abweichen; bei Fragen "
                         "zu konkreten Datenarten (z. B. 'Wohngeld-Einkommensdaten') "
-                        "diesem Tool den Vorrang geben.",
+                        "diesem Tool den Vorrang geben. Für die daraus folgenden "
+                        "Verhaltensvorgaben (z. B. Verschlüsselungspflichten): "
+                        "zusätzlich koos_search_regelung nutzen.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -468,6 +515,40 @@ async def list_tools() -> list[types.Tool]:
                     "prozess_id": {
                         "type": "string",
                         "description": "Filter: VVT-Einträge, die diesen Prozess referenzieren",
+                    },
+                },
+                "required": ["query"],
+            },
+        ),
+        types.Tool(
+            name="koos_search_regelung",
+            description="Suche interne Regelungen dieser Verwaltung — Dienst"
+                        "anweisungen, Satzungen, Geschäftsordnungen (z. B. "
+                        "'E-Mail', 'Cloud-Nutzung'). Liefert die bereits erlassene, "
+                        "verbindliche Regelung inkl. Kontext, Entscheidung und "
+                        "Auszug aus dem Volltext. Ergänzt koos_search_daten: "
+                        "Während koos_search_daten die Schutzstufen-Klassifizierung "
+                        "einer Datenart liefert, liefert dieses Tool die konkreten "
+                        "Verhaltensvorgaben dazu (z. B. welche Verschlüsselung bei "
+                        "welcher Schutzstufe für den E-Mail-Versand vorgeschrieben "
+                        "ist). Bei Fragen zu erlaubten Übertragungswegen, internen "
+                        "Verfahren oder organisatorischen Vorgaben dieses Tool "
+                        "nutzen — dsms-knowledge kennt nur die allgemeine "
+                        "Rechtslage, nicht die hausinterne Regelung.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Name, Thema oder Stichwort (z. B. 'E-Mail', 'Cloud')"
+                    },
+                    "typ": {
+                        "type": "string",
+                        "description": "Filter: Regelungstyp (z. B. 'Dienstanweisung', 'Satzung', 'Geschäftsordnung')",
+                    },
+                    "zustaendige_einheit": {
+                        "type": "string",
+                        "description": "Filter: OE-ID der zuständigen Einheit",
                     },
                 },
                 "required": ["query"],
@@ -541,6 +622,18 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         prozess_id = arguments.get("prozess_id")
         results = _loader.search_vvt(query=query, oe_id=oe_id, prozess_id=prozess_id)
         results = _hybrid_erweitern(_loader, "vvt", results, query)
+        return [types.TextContent(
+            type="text",
+            text=json.dumps(results, ensure_ascii=False, indent=2)
+        )]
+
+    elif name == "koos_search_regelung":
+        query = arguments.get("query", "")
+        typ = arguments.get("typ")
+        zustaendige_einheit = arguments.get("zustaendige_einheit")
+        results = _loader.search_regelung(
+            query=query, typ=typ, zustaendige_einheit=zustaendige_einheit
+        )
         return [types.TextContent(
             type="text",
             text=json.dumps(results, ensure_ascii=False, indent=2)
