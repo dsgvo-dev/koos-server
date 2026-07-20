@@ -2,8 +2,8 @@
 """
 koos_embed.py — Eigenständiger Embedding-Index für KOOS-Stammdaten
 ====================================================================
-Baut/aktualisiert einen semantischen Suchindex über proc-*, vvt-*, dstore-*
-(koos-knowledge/_daten/). Bewusst getrennt von dsms-knowledge/chroma_index.py
+Baut/aktualisiert einen semantischen Suchindex über proc-*, vvt-*, dstore-*,
+reg-* (koos-knowledge/_daten/). Bewusst getrennt von dsms-knowledge/chroma_index.py
 (reine DSMS-Wissensschicht: Urteile, Gesetze, Wiki — kennt KOOS nicht) und
 von dsms-knowledge/skills/nervensystem-sim/ (reine Simulation, kein
 Produktionscode) — damit DSMS und KOOS unabhängig voneinander ausliefer-
@@ -126,6 +126,24 @@ def _text_dstore(d: dict) -> str:
     return " ".join(t for t in teile if t)
 
 
+def _text_regelung(r: dict) -> str:
+    """Nachgezogen am 20.07.2026 zusammen mit koos_search_regelung: ohne
+    diesen Eintrag hätte die Hybrid-Suche (semantische Ergänzung bei wenigen
+    Keyword-Treffern) für Regelungen keinen Index, gegen den sie suchen
+    kann — ein realer Test zeigte, dass die reine Substring-Keyword-Suche
+    bei abweichender Formulierung der Anfrage (z. B. eine ganze Nutzerfrage
+    statt eines einzelnen Begriffs) leer läuft, obwohl die passende
+    Dienstanweisung (reg-da-e-mail-001) vorhanden ist."""
+    teile = [
+        r.get("name", ""),
+        r.get("typ", "") or "",
+        r.get("kontext", "") or "",
+        r.get("entscheidung", "") or "",
+        (r.get("body", "") or "")[:1000],
+    ]
+    return " ".join(t for t in teile if t)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # INDEX BAUEN
 # ══════════════════════════════════════════════════════════════════════════════
@@ -143,6 +161,8 @@ def build_index(data_dir: Path, model_url: str = EMBED_URL,
         quellen.append(("vvt", v.get("id"), _text_vvt(v)))
     for d in loader.daten:
         quellen.append(("dstore", d.get("id"), _text_dstore(d)))
+    for r in loader.regelungen:
+        quellen.append(("reg", r.get("id"), _text_regelung(r)))
 
     print(f"KOOS-Embedding-Index: {len(quellen)} Items "
           f"({model} via {model_url}) ...")
@@ -176,7 +196,8 @@ def build_index(data_dir: Path, model_url: str = EMBED_URL,
     print(f"Index geschrieben: {out_path} ({len(index)} Einträge, "
           f"davon {sum(1 for it in index if it['typ'] == 'proc')} Prozesse, "
           f"{sum(1 for it in index if it['typ'] == 'vvt')} VVT, "
-          f"{sum(1 for it in index if it['typ'] == 'dstore')} Datenarten)")
+          f"{sum(1 for it in index if it['typ'] == 'dstore')} Datenarten, "
+          f"{sum(1 for it in index if it['typ'] == 'reg')} Regelungen)")
     return index
 
 
@@ -246,7 +267,7 @@ def main():
                      help="KOOS-Datenverzeichnis (Default: koos-knowledge/_daten)")
     ap.add_argument("--query", help="Testabfrage gegen den bestehenden Index, "
                                      "statt den Index neu zu bauen")
-    ap.add_argument("--typ", choices=["proc", "vvt", "dstore"],
+    ap.add_argument("--typ", choices=["proc", "vvt", "dstore", "reg"],
                      help="Filter für --query")
     args = ap.parse_args()
 

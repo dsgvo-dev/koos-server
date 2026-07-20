@@ -232,13 +232,14 @@ class KoosLoader:
         }
 
     def by_id(self, typ: str, iid: str) -> dict[str, Any] | None:
-        """Direkter ID-Lookup für einen Item-Typ ('proc', 'vvt', 'dstore') —
+        """Direkter ID-Lookup für einen Item-Typ ('proc', 'vvt', 'dstore', 'reg') —
         genutzt vom semantischen Suchpfad, um Embedding-Treffer (nur IDs)
         wieder in vollständige Datensätze aufzulösen."""
         quelle, formatter = {
             "proc": (self.prozesse, self._format_prozess),
             "vvt": (self.vvt, self._format_vvt),
             "dstore": (self.daten, self._format_daten),
+            "reg": (self.regelungen, self._format_regelung),
         }.get(typ, (None, None))
         if quelle is None:
             return None
@@ -634,6 +635,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         results = _loader.search_regelung(
             query=query, typ=typ, zustaendige_einheit=zustaendige_einheit
         )
+        results = _hybrid_erweitern(_loader, "reg", results, query)
         return [types.TextContent(
             type="text",
             text=json.dumps(results, ensure_ascii=False, indent=2)
