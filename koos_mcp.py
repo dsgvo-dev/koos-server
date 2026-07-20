@@ -159,8 +159,12 @@ class KoosLoader:
                 "id": oe.get("id"),
                 "name": oe.get("name"),
                 "parent": oe.get("parent"),
-                "ebene": oe.get("ebene"),
                 "rollen": oe.get("rollen", []),
+                # sonderfunktionen (7/50 OEs) und hinweis (1/50) fehlten
+                # bislang; 'ebene' entfernt — dieses Feld existiert in
+                # orga.yaml nie, lieferte also immer None (totes Feld).
+                "sonderfunktionen": oe.get("sonderfunktionen", []),
+                "hinweis": oe.get("hinweis"),
             })
         return results
 
@@ -190,33 +194,63 @@ class KoosLoader:
         return [i for i in ids if i and i.startswith("dstore-")]
 
     def _format_prozess(self, p: dict[str, Any]) -> dict[str, Any]:
+        # Nachgezogen 20.07.2026: zustaendigeRolle (in 650/650 Dateien
+        # vorhanden), daten.input/daten.output (welche Daten fließen rein/
+        # raus) und regelungen (prozessspezifische Rechtsgrundlagen-Liste)
+        # fehlten bislang komplett — Systematische Prüfung aller Formatter
+        # gegen die tatsächlich vorhandenen Frontmatter-Felder.
+        daten_feld = p.get("daten") or {}
+        if not isinstance(daten_feld, dict):
+            daten_feld = {}
         return {
             "id": p.get("id"),
             "titel": p.get("titel"),
             "status": p.get("status"),
             "zustaendigeEinheit": p.get("zustaendigeEinheit"),
+            "zustaendigeRolle": p.get("zustaendigeRolle"),
             "beteiligte": p.get("beteiligte", []),
+            "datenInput": daten_feld.get("input", []),
+            "datenOutput": daten_feld.get("output", []),
             "datenspeicher": self._datenspeicher_ids(p),
+            "regelungen": p.get("regelungen", []),
             "leika_id": p.get("leika_id"),
             "ozg_id": p.get("ozg_id"),
+            "letzteAktualisierung": p.get("letzte-aktualisierung"),
         }
 
     def _format_vvt(self, v: dict[str, Any]) -> dict[str, Any]:
         return {
             "id": v.get("id"),
+            "uid": v.get("uid"),
             "titel": v.get("titel"),
             "status": v.get("status"),
             "organisationseinheit": v.get("organisationseinheit"),
+            # Nachgezogen 20.07.2026: 'zweck' wurde bei der Suche als
+            # Match-Kriterium genutzt (siehe search_vvt), aber nie im
+            # Ergebnis zurückgegeben — jetzt sichtbar.
+            "zweck": v.get("zweck"),
             "rechtsgrundlage": v.get("rechtsgrundlage"),
+            # kategorien_betroffener und transfer_drittland sind nach
+            # Art. 30 Abs. 1 DSGVO gesetzlich vorgeschriebene VVT-Angaben —
+            # fehlten bislang komplett im Tool-Output.
+            "kategorien_betroffener": v.get("kategorien_betroffener"),
             "kategorien_daten": v.get("kategorien_daten"),
+            "transfer_drittland": v.get("transfer_drittland"),
             "datenspeicher": [
                 e.get("id") if isinstance(e, dict) else e
                 for e in (v.get("datenspeicher") or [])
             ],
             "loeschfrist": v.get("loeschfrist"),
             "prozesse": v.get("prozesse", []),
+            "software_verarbeitungsmittel": v.get("software_verarbeitungsmittel"),
             "leika_id": v.get("leika_id"),
             "ozg_id": v.get("ozg_id"),
+            "letzteAktualisierung": v.get("letzte-aktualisierung"),
+            # tom/empfaenger: bereits am 20.07.2026 nachgezogen (waren im
+            # Rohdatensatz längst vorhanden, wurden aber von diesem
+            # Formatter verschluckt).
+            "tom": v.get("tom", []),
+            "empfaenger": v.get("empfaenger"),
         }
 
     def _format_daten(self, d: dict[str, Any]) -> dict[str, Any]:
@@ -233,11 +267,22 @@ class KoosLoader:
             "id": d.get("id"),
             "name": d.get("name"),
             "datenkategorie": d.get("datenkategorie"),
+            # zuständige-einheit fehlte bislang — wer für diese Datenart
+            # verantwortlich ist, war über dieses Tool nicht erkennbar.
+            "zustaendigeEinheit": d.get("zuständige-einheit"),
+            "system": d.get("system"),
+            "tags": d.get("tags", []),
             "schutzstufe": klass.get("schutzstufe", d.get("schutzstufe")),
             "schutzbedarf": klass.get("schutzbedarf", d.get("schutzbedarf")),
             "vertraulichkeit": klass.get("vertraulichkeit", d.get("vertraulichkeit")),
             "rechtsgrundlagen": klass.get("rechtsgrundlagen", d.get("rechtsgrundlagen")),
             "aufbewahrungFrist": aufbewahrung.get("frist", d.get("aufbewahrungFrist")),
+            "aufbewahrungBeginn": aufbewahrung.get("beginn"),
+            # aufbewahrung.hinweis enthält oft Datenqualitäts-Caveats (z. B.
+            # "Frist und Beginn fachlich zu validieren") — bislang
+            # unterschlagen, wodurch Antworten sicherer wirkten als die
+            # zugrundeliegende Datenlage tatsächlich ist.
+            "aufbewahrungHinweis": aufbewahrung.get("hinweis"),
         }
 
     def by_id(self, typ: str, iid: str) -> dict[str, Any] | None:
@@ -326,6 +371,9 @@ class KoosLoader:
             "ersetzt": r.get("ersetzt"),
             "kontext": r.get("kontext"),
             "entscheidung": r.get("entscheidung"),
+            # alternativen (in 2/5 Regelungen vorhanden) fehlte bislang —
+            # dokumentiert erwogene, aber verworfene Optionen.
+            "alternativen": r.get("alternativen", []),
             "auszug": (r.get("body") or "")[:500],
         }
 
@@ -485,11 +533,14 @@ async def list_tools() -> list[types.Tool]:
             description="Suche konkrete Verwaltungsprozesse dieser Verwaltung nach "
                         "Name, OE oder Datenart (z. B. 'Wohngeld beantragen', "
                         "'Kfz-Zulassung'). Liefert die für DIESEN Prozess bereits "
-                        "geprüfte, verbindliche Zuordnung (OE, Datenarten, VVT-Bezug). "
+                        "geprüfte, verbindliche Zuordnung (OE, Datenarten). "
                         "Bei Fragen zu einem konkreten Prozess maßgeblicher als die "
                         "allgemeine Rechtslage aus dsms-knowledge/search_knowledge — "
                         "beide Server ergänzen sich, bei Prozessfragen zusätzlich hier "
-                        "nachsehen, nicht nur allgemein herleiten.",
+                        "nachsehen, nicht nur allgemein herleiten. Enthält KEINE "
+                        "Rechtsgrundlage, Löschfrist, Empfänger oder TOM — dafür "
+                        "zusätzlich koos_search_vvt mit prozess_id=<hier gefundene id> "
+                        "aufrufen (oder koos_get_context mit der zustaendigeEinheit).",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -534,13 +585,19 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="koos_search_vvt",
             description="Suche VVT-Einträge (Verzeichnis von Verarbeitungs"
-                        "tätigkeiten) nach Titel/Zweck, OE oder verknüpftem "
-                        "Prozess. Liefert die bereits dokumentierte, verbindliche "
-                        "Rechtsgrundlage, Datenkategorien, Löschfrist und "
-                        "Leika-/OZG-ID für einen konkreten Verwaltungsprozess. "
-                        "Bei Fragen zu einem konkreten Prozess (z. B. Wohngeld) "
-                        "maßgeblicher als eine allgemeine Herleitung aus "
-                        "dsms-knowledge.",
+                        "tätigkeiten, Art. 30 DSGVO) nach Titel/Zweck, OE oder "
+                        "verknüpftem Prozess (Filter prozess_id). Liefert die "
+                        "bereits dokumentierte, verbindliche Rechtsgrundlage, "
+                        "Kategorien betroffener Personen, Datenkategorien, "
+                        "Empfänger, Drittlandtransfer, Löschfrist, TOM (technische "
+                        "und organisatorische Maßnahmen) und Leika-/OZG-ID für "
+                        "einen konkreten Verwaltungsprozess. Bei Fragen zu einem "
+                        "konkreten Prozess (z. B. Wohngeld) maßgeblicher als eine "
+                        "allgemeine Herleitung aus dsms-knowledge — insbesondere "
+                        "bei Fragen nach Rechtsgrundlage, Empfängerkreis oder "
+                        "getroffenen Sicherheitsmaßnahmen (TOM) für einen "
+                        "konkreten Prozess IMMER hier nachsehen, das liefert "
+                        "koos_search_prozess allein nicht.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -622,7 +679,12 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="koos_get_context",
             description="Gesamtkontext einer Organisationseinheit: OE-Daten, "
-                        "Prozesse und Datenarten.",
+                        "Prozesse, VVT-Einträge (inkl. Rechtsgrundlage, "
+                        "Empfänger, Löschfrist, TOM) und Datenarten in einem "
+                        "Aufruf. Praktisch, wenn zu einem Prozess bereits die "
+                        "zuständige OE bekannt ist (z. B. aus koos_search_prozess) "
+                        "und zusätzlich die zugehörigen VVT-/TOM-Angaben benötigt "
+                        "werden, ohne koos_search_vvt separat aufzurufen.",
             inputSchema={
                 "type": "object",
                 "properties": {

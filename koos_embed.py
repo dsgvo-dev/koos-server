@@ -98,7 +98,21 @@ def _vvt_by_prozess(vvt_liste: list[dict]) -> dict[str, list[dict]]:
 
 
 def _text_prozess(p: dict, vvt_map: dict[str, list[dict]]) -> str:
-    teile = [p.get("titel", ""), p.get("zustaendigeRolle", "") or ""]
+    # Nachgezogen 20.07.2026: daten.input/daten.output (welche Daten ein
+    # Prozess verarbeitet) und regelungen (zitierte Rechtsgrundlagen)
+    # fehlten bislang im Embedding-Text — eine Anfrage wie "Wohngeldbescheid"
+    # oder "§ 22 WoGG" hätte diesen Prozess sonst nicht semantisch treffen
+    # können, obwohl beides fachlich exakt zutrifft.
+    daten_feld = p.get("daten") or {}
+    if not isinstance(daten_feld, dict):
+        daten_feld = {}
+    teile = [
+        p.get("titel", ""),
+        p.get("zustaendigeRolle", "") or "",
+        " ".join(str(x) for x in (daten_feld.get("input") or [])),
+        " ".join(str(x) for x in (daten_feld.get("output") or [])),
+        " ".join(str(x) for x in (p.get("regelungen") or [])),
+    ]
     for v in vvt_map.get(p.get("id"), []):
         teile.append(v.get("rechtsgrundlage", "") or "")
         teile.append(v.get("kategorien_daten", "") or "")
@@ -107,11 +121,19 @@ def _text_prozess(p: dict, vvt_map: dict[str, list[dict]]) -> str:
 
 
 def _text_vvt(v: dict) -> str:
+    # Nachgezogen 20.07.2026: kategorien_betroffener, tom und empfaenger
+    # fehlten bislang — Anfragen wie "welcher VVT-Eintrag hat noch keine
+    # TOM dokumentiert" oder "wer bekommt Wohngeld-Daten" (Empfänger)
+    # konnten diese Einträge semantisch nicht finden.
     teile = [
         v.get("titel", ""),
         v.get("zweck", "") or "",
         v.get("rechtsgrundlage", "") or "",
         v.get("kategorien_daten", "") or "",
+        v.get("kategorien_betroffener", "") or "",
+        v.get("empfaenger", "") or "",
+        v.get("software_verarbeitungsmittel", "") or "",
+        " ".join(str(x) for x in (v.get("tom") or [])),
     ]
     return " ".join(t for t in teile if t)
 
@@ -122,6 +144,10 @@ def _text_dstore(d: dict) -> str:
         d.get("name", ""),
         d.get("datenkategorie", "") or "",
         " ".join(str(t) for t in tags),
+        # system nachgezogen 20.07.2026: Anfragen nach dem konkreten
+        # IT-Fachverfahren (z. B. "OK.WOBIS") sollten die zugehörige
+        # Datenart finden können.
+        d.get("system", "") or "",
     ]
     return " ".join(t for t in teile if t)
 
