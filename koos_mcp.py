@@ -127,7 +127,16 @@ class KoosLoader:
                     except yaml.YAMLError:
                         frontmatter = {}
                     body = parts[2].strip()
-            entry = {"id": f.stem, "datei": str(f), "body": body[:500]}
+            # Cap bewusst großzügig (20000 statt vormals 500 Zeichen): Für
+            # Regelungen (Dienstanweisungen etc.) steckt der eigentliche
+            # Inhalt (z. B. eine Verschlüsselungspflichten-Tabelle) oft erst
+            # nach den ersten Absätzen im body — bei 500 Zeichen war er für
+            # _text_regelung() (Embedding-Text) und _format_regelung()
+            # (Such-Auszug) schlicht nicht erreichbar. Nachgezogen 20.07.2026,
+            # nachdem ein realer Test zeigte, dass koos_search_regelung die
+            # richtige Regelung fand, aber der Auszug die relevante Tabelle
+            # gar nicht enthalten konnte.
+            entry = {"id": f.stem, "datei": str(f), "body": body[:20000]}
             entry.update(frontmatter)
             result.append(entry)
         return result
@@ -350,6 +359,33 @@ class KoosLoader:
             results.append(formatted)
         return results
 
+    def get_regelung_volltext(self, reg_id: str) -> dict[str, Any] | None:
+        """Vollständiger, ungekürzter Text einer Regelung — liest die
+        .md-Datei frisch von der Platte (nicht aus self.regelungen, das über
+        _load_markdown_dir() gecappt ist), damit die Volltext-Ausgabe
+        unabhängig von jedem Lade-Cap immer wirklich vollständig ist.
+        Ergänzt koos_search_regelung, deren 'auszug'-Feld bewusst kurz
+        bleibt (Übersicht) — für den kompletten Text (z. B. eine vollständige
+        Verschlüsselungspflichten-Tabelle) dieses Tool mit der von
+        koos_search_regelung gelieferten id aufrufen. Nachgezogen 20.07.2026."""
+        treffer = next((r for r in self.regelungen if r.get("id") == reg_id), None)
+        if treffer is None:
+            return None
+        datei = Path(treffer["datei"])
+        try:
+            content = datei.read_text(encoding="utf-8")
+        except OSError:
+            return None
+        body = content
+        if content.startswith("---"):
+            parts = content.split("---", 2)
+            if len(parts) >= 3:
+                body = parts[2].strip()
+        formatted = self._format_regelung(treffer)
+        formatted["volltext"] = body
+        formatted.pop("auszug", None)
+        return formatted
+
     def get_context(self, oe_id: str) -> dict[str, Any]:
         """Gesamtkontext einer OE."""
         oes = self.search_oe(query=oe_id)
@@ -535,7 +571,11 @@ async def list_tools() -> list[types.Tool]:
                         "ist). Bei Fragen zu erlaubten Übertragungswegen, internen "
                         "Verfahren oder organisatorischen Vorgaben dieses Tool "
                         "nutzen — dsms-knowledge kennt nur die allgemeine "
-                        "Rechtslage, nicht die hausinterne Regelung.",
+                        "Rechtslage, nicht die hausinterne Regelung. Der 'auszug' "
+                        "ist bewusst kurz; für Details, die weiter hinten im "
+                        "Dokument stehen (z. B. eine vollständige Tabelle), "
+                        "zusätzlich koos_get_regelung_volltext mit der "
+                        "gefundenen id aufrufen.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -553,6 +593,30 @@ async def list_tools() -> list[types.Tool]:
                     },
                 },
                 "required": ["query"],
+            },
+        ),
+        types.Tool(
+            name="koos_get_regelung_volltext",
+            description="Vollständiger, ungekürzter Text einer Regelung "
+                        "(Dienstanweisung, Satzung, Geschäftsordnung). "
+                        "koos_search_regelung liefert bewusst nur einen kurzen "
+                        "Auszug zur Übersicht — Details, die weiter hinten im "
+                        "Dokument stehen (z. B. eine vollständige "
+                        "Verschlüsselungspflichten- oder Fristentabelle), sind "
+                        "darin nicht enthalten. Nach einem Treffer bei "
+                        "koos_search_regelung dieses Tool mit der dort "
+                        "gelieferten id aufrufen, um den kompletten Text zu "
+                        "erhalten, bevor eine Frage zu internen Verfahrens"
+                        "vorgaben abschließend beantwortet wird.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "reg_id": {
+                        "type": "string",
+                        "description": "id der Regelung, wie von koos_search_regelung geliefert (z. B. 'reg-da-e-mail-001')",
+                    },
+                },
+                "required": ["reg_id"],
             },
         ),
         types.Tool(
@@ -639,6 +703,23 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         return [types.TextContent(
             type="text",
             text=json.dumps(results, ensure_ascii=False, indent=2)
+        )]
+
+    elif name == "koos_get_regelung_volltext":
+        reg_id = arguments.get("reg_id", "")
+        if not reg_id:
+            return [types.TextContent(
+                type="text", text="Fehler: reg_id erforderlich."
+            )]
+        result = _loader.get_regelung_volltext(reg_id=reg_id)
+        if result is None:
+            return [types.TextContent(
+                type="text",
+                text=f"⚠ Regelung '{reg_id}' nicht gefunden."
+            )]
+        return [types.TextContent(
+            type="text",
+            text=json.dumps(result, ensure_ascii=False, indent=2)
         )]
 
     elif name == "koos_get_context":

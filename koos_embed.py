@@ -134,12 +134,18 @@ def _text_regelung(r: dict) -> str:
     bei abweichender Formulierung der Anfrage (z. B. eine ganze Nutzerfrage
     statt eines einzelnen Begriffs) leer läuft, obwohl die passende
     Dienstanweisung (reg-da-e-mail-001) vorhanden ist."""
+    # Kein Cap unter 15000: die längsten aktuellen Regelungen (z. B. die
+    # ADGA) haben ~13-14 Tausend Zeichen Body — ein 1000-Zeichen-Cap hätte
+    # exakt denselben Fehler wiederholt, der gerade erst in
+    # _load_markdown_dir() (koos_mcp.py) behoben wurde: der fachlich
+    # relevante Teil (z. B. eine Tabelle) steht oft erst weiter hinten im
+    # Dokument und wäre sonst für die Embedding-Suche unsichtbar.
     teile = [
         r.get("name", ""),
         r.get("typ", "") or "",
         r.get("kontext", "") or "",
         r.get("entscheidung", "") or "",
-        (r.get("body", "") or "")[:1000],
+        (r.get("body", "") or "")[:15000],
     ]
     return " ".join(t for t in teile if t)
 
