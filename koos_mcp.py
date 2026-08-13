@@ -25,7 +25,10 @@ from typing import Any
 import yaml
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp import types
+from mcp.types import (
+    CallToolRequestParams, CallToolResult, ListToolsRequest,
+    ListToolsResult, TextContent, Tool,
+)
 
 try:
     import koos_embed
@@ -496,10 +499,9 @@ server = Server("koos-mcp")
 
 _loader: KoosLoader | None = None
 
-@server.list_tools()
-async def list_tools() -> list[types.Tool]:
+def _build_tools() -> list[Tool]:
     return [
-        types.Tool(
+        Tool(
             name="koos_search_oe",
             description="Suche Organisationseinheiten nach Name oder ID. "
                         "Optional filter nach parent_id.",
@@ -515,7 +517,7 @@ async def list_tools() -> list[types.Tool]:
                 "required": ["query"],
             },
         ),
-        types.Tool(
+        Tool(
             name="koos_get_oe_tree",
             description="Organigramm abrufen. Ohne root_id: alle OEs.",
             inputSchema={
@@ -528,7 +530,7 @@ async def list_tools() -> list[types.Tool]:
                 },
             },
         ),
-        types.Tool(
+        Tool(
             name="koos_search_prozess",
             description="Suche konkrete Verwaltungsprozesse dieser Verwaltung nach "
                         "Name, OE oder Datenart (z. B. 'Wohngeld beantragen', "
@@ -557,7 +559,7 @@ async def list_tools() -> list[types.Tool]:
                 "required": ["query"],
             },
         ),
-        types.Tool(
+        Tool(
             name="koos_search_daten",
             description="Suche Datenarten nach Name, Kategorie oder Schutzstufe. "
                         "Liefert die für diese Verwaltung bereits fachlich geprüfte, "
@@ -582,7 +584,7 @@ async def list_tools() -> list[types.Tool]:
                 "required": ["query"],
             },
         ),
-        types.Tool(
+        Tool(
             name="koos_search_vvt",
             description="Suche VVT-Einträge (Verzeichnis von Verarbeitungs"
                         "tätigkeiten, Art. 30 DSGVO) nach Titel/Zweck, OE oder "
@@ -614,7 +616,7 @@ async def list_tools() -> list[types.Tool]:
                 "required": ["query"],
             },
         ),
-        types.Tool(
+        Tool(
             name="koos_search_regelung",
             description="Suche interne Regelungen dieser Verwaltung — Dienst"
                         "anweisungen, Satzungen, Geschäftsordnungen (z. B. "
@@ -652,7 +654,7 @@ async def list_tools() -> list[types.Tool]:
                 "required": ["query"],
             },
         ),
-        types.Tool(
+        Tool(
             name="koos_get_regelung_volltext",
             description="Vollständiger, ungekürzter Text einer Regelung "
                         "(Dienstanweisung, Satzung, Geschäftsordnung). "
@@ -676,7 +678,7 @@ async def list_tools() -> list[types.Tool]:
                 "required": ["reg_id"],
             },
         ),
-        types.Tool(
+        Tool(
             name="koos_get_context",
             description="Gesamtkontext einer Organisationseinheit: OE-Daten, "
                         "Prozesse, VVT-Einträge (inkl. Rechtsgrundlage, "
@@ -699,15 +701,20 @@ async def list_tools() -> list[types.Tool]:
     ]
 
 
-@server.call_tool()
-async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
+async def _handle_list_tools(ctx, params: ListToolsRequest | None) -> ListToolsResult:
+    return ListToolsResult(tools=_build_tools())
+
+
+async def _handle_call_tool(ctx, params: CallToolRequestParams) -> CallToolResult:
+    name = params.name
+    arguments = params.arguments or {}
     assert _loader is not None, "Loader nicht initialisiert"
 
     if name == "koos_search_oe":
         query = arguments.get("query", "")
         parent_id = arguments.get("parent_id")
         results = _loader.search_oe(query=query, parent_id=parent_id)
-        return [types.TextContent(
+        return [TextContent(
             type="text",
             text=json.dumps(results, ensure_ascii=False, indent=2)
         )]
@@ -715,7 +722,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
     elif name == "koos_get_oe_tree":
         root_id = arguments.get("root_id")
         results = _loader.get_oe_tree(root_id=root_id)
-        return [types.TextContent(
+        return [TextContent(
             type="text",
             text=json.dumps(results, ensure_ascii=False, indent=2)
         )]
@@ -728,7 +735,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
             query=query, oe_id=oe_id, datenart_id=datenart_id
         )
         results = _hybrid_erweitern(_loader, "proc", results, query)
-        return [types.TextContent(
+        return [TextContent(
             type="text",
             text=json.dumps(results, ensure_ascii=False, indent=2)
         )]
@@ -738,7 +745,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         schutzstufe = arguments.get("schutzstufe")
         results = _loader.search_daten(query=query, schutzstufe=schutzstufe)
         results = _hybrid_erweitern(_loader, "dstore", results, query)
-        return [types.TextContent(
+        return [TextContent(
             type="text",
             text=json.dumps(results, ensure_ascii=False, indent=2)
         )]
@@ -749,7 +756,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         prozess_id = arguments.get("prozess_id")
         results = _loader.search_vvt(query=query, oe_id=oe_id, prozess_id=prozess_id)
         results = _hybrid_erweitern(_loader, "vvt", results, query)
-        return [types.TextContent(
+        return [TextContent(
             type="text",
             text=json.dumps(results, ensure_ascii=False, indent=2)
         )]
@@ -762,7 +769,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
             query=query, typ=typ, zustaendige_einheit=zustaendige_einheit
         )
         results = _hybrid_erweitern(_loader, "reg", results, query)
-        return [types.TextContent(
+        return [TextContent(
             type="text",
             text=json.dumps(results, ensure_ascii=False, indent=2)
         )]
@@ -770,16 +777,16 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
     elif name == "koos_get_regelung_volltext":
         reg_id = arguments.get("reg_id", "")
         if not reg_id:
-            return [types.TextContent(
+            return [TextContent(
                 type="text", text="Fehler: reg_id erforderlich."
             )]
         result = _loader.get_regelung_volltext(reg_id=reg_id)
         if result is None:
-            return [types.TextContent(
+            return [TextContent(
                 type="text",
                 text=f"⚠ Regelung '{reg_id}' nicht gefunden."
             )]
-        return [types.TextContent(
+        return [TextContent(
             type="text",
             text=json.dumps(result, ensure_ascii=False, indent=2)
         )]
@@ -787,17 +794,17 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
     elif name == "koos_get_context":
         oe_id = arguments.get("oe_id", "")
         if not oe_id:
-            return [types.TextContent(
+            return [TextContent(
                 type="text", text="Fehler: oe_id erforderlich."
             )]
         context = _loader.get_context(oe_id=oe_id)
-        return [types.TextContent(
+        return [TextContent(
             type="text",
             text=json.dumps(context, ensure_ascii=False, indent=2)
         )]
 
     else:
-        return [types.TextContent(
+        return [TextContent(
             type="text", text=f"Unbekanntes Tool: {name}"
         )]
 
@@ -865,6 +872,9 @@ def main():
         f"{len(loader.daten)} Datenarten)",
         file=sys.stderr,
     )
+
+    server.add_request_handler("tools/list", ListToolsRequest, _handle_list_tools)
+    server.add_request_handler("tools/call", CallToolRequestParams, _handle_call_tool)
 
     if args.transport == "sse":
         from mcp.server.sse import SseServerTransport
