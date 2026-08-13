@@ -10865,7 +10865,7 @@ function runSearch(term) {
   const procHits  = PROZESSE.filter(p => p.titel.toLowerCase().includes(q) ||
                      resolve(p.zustaendigeEinheit).toLowerCase().includes(q));
   const datenHits = DATEN.filter(d => d.name.toLowerCase().includes(q) ||
-                     d.datenkategorie.toLowerCase().includes(q));
+                     (d.datenkategorie || "").toLowerCase().includes(q));
 
   const total = oeHits.length + procHits.length + datenHits.length;
   searchStat.textContent = total > 0 ? `${total} Treffer` : "Keine Treffer";

@@ -30,8 +30,11 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
+import statistics
 import sys
 import urllib.request
+from collections import Counter
 from pathlib import Path
 
 from koos_mcp import KoosLoader
@@ -138,7 +141,32 @@ def _text_vvt(v: dict) -> str:
     return " ".join(t for t in teile if t)
 
 
-def _text_dstore(d: dict) -> str:
+def _bausteine_erkennen(daten: list[dict], schwelle: int = 5) -> set[str]:
+    """Ermittelt wiederkehrende Textbausteine über den gesamten Datenarten-Bestand.
+
+    Ein Absatz gilt als Baustein, wenn er nach Normalisierung der Leerräume in
+    mehr als `schwelle` Datenarten wortgleich vorkommt (und länger als 40 Zeichen
+    ist — kürzere Absätze sind zu generisch, um als Sammelvermerk zu zählen).
+
+    Begründung der Schwelle > 5 (Auftrag 12.08.2026, Abschnitt 2.2 / 4.3): Die
+    BSI- und Schutzstufen-Sammelvermerke stehen in bis zu 185 Dateien wortgleich.
+    Über die Spanne >3 bis >20 bewegt sich der Eigenanteil (Anteil der für eine
+    Datenart kennzeichnenden Wörter) nur um vier Prozentpunkte (57 % → 50 %) —
+    ein schwaches Signal, das keinen Dreifach-Rebuild rechtfertigt. Gewählt ist
+    daher der mittlere Wert >5; nur wenn der Rangfolgen-Test (Test B) Verwässerung
+    zeigt, wird auf >3 gesenkt.
+    """
+    absatz_df: Counter = Counter()
+    for d in daten:
+        body = d.get("body", "") or ""
+        for absatz in re.split(r"\n\s*\n", body):
+            norm = " ".join(absatz.split())
+            if len(norm) > 40:
+                absatz_df[norm] += 1
+    return {a for a, n in absatz_df.items() if n > schwelle}
+
+
+def _text_dstore(d: dict, bausteine: set[str] | None = None) -> str:
     tags = d.get("tags", []) or []
     teile = [
         d.get("name", ""),
@@ -149,6 +177,25 @@ def _text_dstore(d: dict) -> str:
         # Datenart finden können.
         d.get("system", "") or "",
     ]
+    # V4 (Auftrag 12.08.2026): der Rumpf der Datei abzüglich wiederkehrender
+    # Textbausteine. Die Datenart trägt die dichteste Fachsprache, sah aber
+    # bisher nur ihre vier Metadatenfelder (~3 % des Dateiinhalts, Median 79
+    # Zeichen). Der Rumpf — Definition, Felder, Rechtsgrundlagen, Aufbewahrung,
+    # Schutzstufen- und BSI-Vermerke mit Normbegründungen — ist der wertvollste
+    # Suchstoff des Bestands. Kein Cap: der längste V4-Text liegt bei ~4900
+    # Zeichen, und der fachlich relevante Teil steht oft weiter hinten
+    # (derselbe Grund wie bei _text_regelung).
+    body = d.get("body", "") or ""
+    if bausteine is not None and body:
+        behalten = []
+        for absatz in re.split(r"\n\s*\n", body):
+            norm = " ".join(absatz.split())
+            if len(norm) > 40 and norm in bausteine:
+                continue
+            behalten.append(norm)
+        body = " ".join(behalten)
+    if body:
+        teile.append(body)
     return " ".join(t for t in teile if t)
 
 
@@ -186,13 +233,32 @@ def build_index(data_dir: Path, model_url: str = EMBED_URL,
     loader.load_all()
     vvt_map = _vvt_by_prozess(loader.vvt)
 
+    # V4 (Auftrag 12.08.2026): Bausteine einmal je Indexlauf über den
+    # Gesamtbestand bestimmen, dann je Datenart aus dem Embedding-Text
+    # ausschließen. Die Bausteinmenge ändert sich mit dem Bestand (ein neuer
+    # Sammelvermerk wird automatisch erkannt) — deshalb wird sie hier und
+    # nicht als Konstante gebildet. Ein Sprung in der Anzahl ist ein Signal.
+    bausteine = _bausteine_erkennen(loader.daten, schwelle=5)
+    entfernt = []
+    for d in loader.daten:
+        body = d.get("body", "") or ""
+        weg = 0
+        for absatz in re.split(r"\n\s*\n", body):
+            norm = " ".join(absatz.split())
+            if len(norm) > 40 and norm in bausteine:
+                weg += len(norm)
+        entfernt.append(weg)
+    median_weg = int(statistics.median(entfernt)) if entfernt else 0
+    print(f"Bausteinerkennung: {len(bausteine)} Absätze erkannt, "
+          f"Median {median_weg} Zeichen je Datenart entfernt")
+
     quellen: list[tuple[str, str | None, str]] = []
     for p in loader.prozesse:
         quellen.append(("proc", p.get("id"), _text_prozess(p, vvt_map)))
     for v in loader.vvt:
         quellen.append(("vvt", v.get("id"), _text_vvt(v)))
     for d in loader.daten:
-        quellen.append(("dstore", d.get("id"), _text_dstore(d)))
+        quellen.append(("dstore", d.get("id"), _text_dstore(d, bausteine)))
     for r in loader.regelungen:
         quellen.append(("reg", r.get("id"), _text_regelung(r)))
 
