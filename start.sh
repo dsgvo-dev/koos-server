@@ -17,7 +17,7 @@ fi
 # Standardwerte (können per Umgebungsvariable überschrieben werden)
 export KOOS_HOST="${KOOS_HOST:-0.0.0.0}"
 export KOOS_PORT="${KOOS_PORT:-8090}"
-export KOOS_DATA_DIR="${KOOS_DATA_DIR:-$SCRIPT_DIR/../koos-daten}"
+export KOOS_DATA_DIR="${KOOS_DATA_DIR:-$SCRIPT_DIR/../_daten}"
 
 echo "=== KOOS Server ==="
 echo "Host:     $KOOS_HOST:$KOOS_PORT"
