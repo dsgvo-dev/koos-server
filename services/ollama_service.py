@@ -151,8 +151,8 @@ def _lade_kontext(frage: str) -> list[str]:
         from routers.stats import get_ohne_prozess
         daten = get_ohne_prozess()
         zeilen = "\n".join(
-            f"  - {d['name']} ({d.get('datenkategorie','')}, "
-            f"zuständig: {_oe_name(d.get('zustaendigeEinheit',''), namen)})"
+            f"  - {d['name']} "
+            f"(zuständig: {_oe_name(d.get('zustaendigeEinheit',''), namen)})"
             for d in daten["ohne_prozess"][:30]
         )
         blöcke.append(
@@ -167,8 +167,8 @@ def _lade_kontext(frage: str) -> list[str]:
         treffer_r = _suche_regelungen(frage)
         if treffer_d:
             zeilen = "\n".join(
-                f"  - {d['name']} ({d.get('datenkategorie','')}, "
-                f"zuständig: {_oe_name(d.get('zustaendigeEinheit',''), namen)})"
+                f"  - {d['name']} "
+                f"(zuständig: {_oe_name(d.get('zustaendigeEinheit',''), namen)})"
                 for d in treffer_d[:10]
             )
             blöcke.append(f"Gefundene Datenspeicher ({len(treffer_d)}):\n{zeilen}")
@@ -222,10 +222,6 @@ def _regelung_block(r: dict) -> str:
         f"  Datum: {r.get('datum','')}",
         f"  Beschlossen durch: {r.get('entscheidendesGremium','—')}",
     ]
-    if r.get("kontext"):
-        lines.append(f"  Kontext: {r['kontext']}")
-    if r.get("entscheidung"):
-        lines.append(f"  Inhalt/Entscheidung: {r['entscheidung']}")
     # Ersten Teil des Markdown-Body einbinden (max. 1500 Zeichen)
     if r.get("body"):
         body_kurz = r["body"][:1500]
@@ -267,7 +263,7 @@ def _suche_daten(q: str) -> list[dict]:
         if any(
             b in d.get("name", "").lower()
             or b in d.get("id", "").lower()
-            or b in d.get("datenkategorie", "").lower()
+            or b in d.get("zustaendigeEinheit", "").lower()
             for b in begriffe
         )
     ]
@@ -286,7 +282,7 @@ def _suche_prozesse(q: str) -> list[dict]:
 
 
 def _suche_regelungen(frage: str) -> list[dict]:
-    """Volltextsuche über Regelungen: Name, Typ, kontext, entscheidung, body."""
+    """Volltextsuche über Regelungen: Name, Typ, Body."""
     q = frage.lower()
     # Suche über mehrere Wörter: alle Treffer aus mind. einem Suchterm
     begriffe = [w for w in q.split() if len(w) > 3]
@@ -296,7 +292,6 @@ def _suche_regelungen(frage: str) -> list[dict]:
     for r in parser.lade_alle_regelungen(config.REGELUNGEN_DIR):
         text = " ".join([
             r.get("name", ""), r.get("typ", ""),
-            r.get("kontext", ""), r.get("entscheidung", ""),
             r.get("body", "")
         ]).lower()
         if any(b in text for b in begriffe):

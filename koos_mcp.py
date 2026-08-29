@@ -269,7 +269,6 @@ class KoosLoader:
         return {
             "id": d.get("id"),
             "name": d.get("name"),
-            "datenkategorie": d.get("datenkategorie"),
             # zuständige-einheit fehlte bislang — wer für diese Datenart
             # verantwortlich ist, war über dieses Tool nicht erkennbar.
             "zustaendigeEinheit": d.get("zuständige-einheit"),
@@ -353,8 +352,8 @@ class KoosLoader:
         for d in self.daten:
             name = str(d.get("name", "")).lower()
             oid = str(d.get("id", "")).lower()
-            kat = str(d.get("datenkategorie", "")).lower()
-            if q and q not in name and q not in oid and q not in kat:
+            oe = str(d.get("zuständige-einheit", "")).lower()
+            if q and q not in name and q not in oid and q not in oe:
                 continue
             formatted = self._format_daten(d)
             if schutzstufe and formatted["schutzstufe"] != schutzstufe:
@@ -372,11 +371,6 @@ class KoosLoader:
             "zustaendigeEinheit": r.get("zustaendigeEinheit") or r.get("zuständige-einheit"),
             "entscheidendesGremium": r.get("entscheidendesGremium") or r.get("entscheidendes-gremium"),
             "ersetzt": r.get("ersetzt"),
-            "kontext": r.get("kontext"),
-            "entscheidung": r.get("entscheidung"),
-            # alternativen (in 2/5 Regelungen vorhanden) fehlte bislang —
-            # dokumentiert erwogene, aber verworfene Optionen.
-            "alternativen": r.get("alternativen", []),
             "auszug": (r.get("body") or "")[:500],
         }
 
@@ -388,18 +382,16 @@ class KoosLoader:
         schon lädt (self.regelungen) und eine eigene REST-Route existiert
         (_server/routers/regelungen.py) — nachgezogen am 20.07.2026, nachdem
         ein realer Test zeigte, dass z. B. die Dienstanweisung zur
-        E-Mail-Nutzung (reg-da-e-mail-001) über MCP nicht auffindbar war.
+        E-Mail-Nutzung (reg-da-e-mail) über MCP nicht auffindbar war.
         """
         results = []
         q = query.lower()
         for r in self.regelungen:
             name = str(r.get("name", "")).lower()
             rid = str(r.get("id", "")).lower()
-            kontext = str(r.get("kontext", "")).lower()
-            entscheidung = str(r.get("entscheidung", "")).lower()
             body = str(r.get("body", "")).lower()
             if q and not any(
-                q in feld for feld in (name, rid, kontext, entscheidung, body)
+                q in feld for feld in (name, rid, body)
             ):
                 continue
             formatted = self._format_regelung(r)
@@ -672,7 +664,7 @@ def _build_tools() -> list[Tool]:
                 "properties": {
                     "reg_id": {
                         "type": "string",
-                        "description": "id der Regelung, wie von koos_search_regelung geliefert (z. B. 'reg-da-e-mail-001')",
+                        "description": "id der Regelung, wie von koos_search_regelung geliefert (z. B. 'reg-da-e-mail')",
                     },
                 },
                 "required": ["reg_id"],

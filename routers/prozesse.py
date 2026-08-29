@@ -108,7 +108,9 @@ async def put_prozess(prozess_id: str, request: Request) -> dict:
     if "application/json" in content_type:
         data: dict = await request.json()
         begruendung = data.pop("_begruendung", None)
-        md_text = parser.prozess_to_md(data)
+        # Merge statt Überschreiben: erhält body, letzte-aktualisierung,
+        # ersetzt-durch, leika_id, ozg_id und alles, was die Maske nicht führt.
+        md_text = parser.prozess_to_md_merge(data, datei if datei.exists() else None)
     else:
         md_text = (await request.body()).decode("utf-8")
 

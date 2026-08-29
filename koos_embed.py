@@ -170,7 +170,7 @@ def _text_dstore(d: dict, bausteine: set[str] | None = None) -> str:
     tags = d.get("tags", []) or []
     teile = [
         d.get("name", ""),
-        d.get("datenkategorie", "") or "",
+        # datenkategorie am 2026-08-15 entfallen (ADR 013)
         " ".join(str(t) for t in tags),
         # system nachgezogen 20.07.2026: Anfragen nach dem konkreten
         # IT-Fachverfahren (z. B. "OK.WOBIS") sollten die zugehörige
@@ -206,7 +206,7 @@ def _text_regelung(r: dict) -> str:
     kann — ein realer Test zeigte, dass die reine Substring-Keyword-Suche
     bei abweichender Formulierung der Anfrage (z. B. eine ganze Nutzerfrage
     statt eines einzelnen Begriffs) leer läuft, obwohl die passende
-    Dienstanweisung (reg-da-e-mail-001) vorhanden ist."""
+    Dienstanweisung (reg-da-e-mail) vorhanden ist."""
     # Kein Cap unter 15000: die längsten aktuellen Regelungen (z. B. die
     # ADGA) haben ~13-14 Tausend Zeichen Body — ein 1000-Zeichen-Cap hätte
     # exakt denselben Fehler wiederholt, der gerade erst in
@@ -216,8 +216,6 @@ def _text_regelung(r: dict) -> str:
     teile = [
         r.get("name", ""),
         r.get("typ", "") or "",
-        r.get("kontext", "") or "",
-        r.get("entscheidung", "") or "",
         (r.get("body", "") or "")[:15000],
     ]
     return " ".join(t for t in teile if t)

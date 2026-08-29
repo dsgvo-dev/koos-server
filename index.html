@@ -859,9 +859,11 @@
     .ff-list-row {
       display: flex; align-items: center; gap: 6px;
     }
-    .ff-oe-aufgabe-row { flex-wrap: nowrap; gap: 6px; }
-    .ff-oe-aufgabe-row .ff-oe-sel { flex: 0 0 44%; }
-    .ff-oe-aufgabe-row .ff-aufgabe-input { flex: 1; }
+    .ff-oe-aufgabe-row { flex-wrap: wrap; gap: 6px; }
+    .ff-oe-aufgabe-row .ff-oe-sel      { flex: 0 0 30%; }
+    .ff-oe-aufgabe-row .ff-rolle-input { flex: 0 0 20%; }
+    .ff-oe-aufgabe-row .ff-phase-input { flex: 0 0 9%; }
+    .ff-oe-aufgabe-row .ff-aufgabe-input { flex: 1; min-width: 30%; }
     .ff-list-input { flex: 1; }
     .ff-remove-btn {
       flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%;
@@ -10148,7 +10150,6 @@ const DATEN = [
   {
     "id": "datenschutzeinweisung",
     "name": "Datenschutzeinweisung",
-    "datenkategorie": "Compliance-Dokument",
     "zustaendigeEinheit": "oe-fb1-personal",
     "schutzstufe": "",
     "schutzbedarf": "",
@@ -10158,7 +10159,6 @@ const DATEN = [
   {
     "id": "identitaetsnachweis",
     "name": "Identitätsnachweis (Vorlage)",
-    "datenkategorie": "Ausweisdokument",
     "zustaendigeEinheit": "oe-fb1-buerger",
     "schutzstufe": "",
     "schutzbedarf": "",
@@ -10168,7 +10168,6 @@ const DATEN = [
   {
     "id": "it-berechtigungsantrag",
     "name": "IT-Berechtigungsantrag",
-    "datenkategorie": "Verwaltungsformular",
     "zustaendigeEinheit": "oe-fb1-it",
     "schutzstufe": "",
     "schutzbedarf": "",
@@ -10178,7 +10177,6 @@ const DATEN = [
   {
     "id": "meldebescheinigung",
     "name": "Meldebescheinigung",
-    "datenkategorie": "Bescheid / Nachweis",
     "zustaendigeEinheit": "oe-fb1-buerger",
     "schutzstufe": "",
     "schutzbedarf": "",
@@ -10188,7 +10186,6 @@ const DATEN = [
   {
     "id": "meldeschein",
     "name": "Meldeschein",
-    "datenkategorie": "Verwaltungsformular / Meldedaten",
     "zustaendigeEinheit": "oe-fb1-buerger",
     "schutzstufe": "",
     "schutzbedarf": "",
@@ -10198,7 +10195,6 @@ const DATEN = [
   {
     "id": "personalakte",
     "name": "Personalakte",
-    "datenkategorie": "Personaldaten",
     "zustaendigeEinheit": "oe-fb1-personal",
     "schutzstufe": "",
     "schutzbedarf": "",
@@ -10223,7 +10219,7 @@ const DATEN = [
 // Fallback: Hardcodierte Werte für den Fall dass der Server nicht erreichbar ist.
 // Nach Umstieg auf Server-Betrieb müssen die Fallback-Werte NICHT mehr gepflegt werden.
 let CONFIG = {
-  superadminHash: "e34f4b940d9e21f0ef7e0ac647704ad01d964c00b0148fbeb19995be6d80e123",
+  superadminHash: "5ad7c2af9ba7115b557f91e29e98af07c0e73751930b510d5bac0c26f224decc",
   subadmins: [
     {
       id: "sub-fb1", name: "Fachbereich 1 – Personal & IT",
@@ -10297,12 +10293,7 @@ const VOKABULAR = {
   schutzstufe:     ["A","B","C","D","E"],
   schutzbedarf:    ["normal","hoch","sehr hoch"],
   vertraulichkeit: ["öffentlich","intern","vertraulich","streng vertraulich"],
-  datenkategorie:  [
-    "Personaldaten","Sozialdaten","Gesundheitsdaten","Finanzdaten",
-    "Meldedaten","Ausweisdokument","Verwaltungsformular",
-    "Bescheid / Nachweis","Compliance-Dokument",
-    "Ordnungswidrigkeiten","Besondere Kategorien Art. 9 DSGVO"
-  ],
+  // datenkategorie am 2026-08-15 entfallen (ADR 013)
   prozessStatus:   ["aktiv","inaktiv","entwurf"],
   regelungTyp:     ["Gesetz","Satzung","Dienstanweisung","Richtlinie","Geschäftsordnung","Vertrag","Beschluss","Norm"],
   regelungStatus:  ["aktiv","ersetzt","aufgehoben"]
@@ -10331,9 +10322,12 @@ const FORMULAR_SCHEMA = {
       { id: "status",             label: "Status",                    typ: "select",         werte: VOKABULAR.prozessStatus, pflicht: true },
       { id: "zustaendigeEinheit", label: "Zuständige OE",             typ: "oe-select",      pflicht: true },
       { id: "zustaendigeRolle",   label: "Zuständige Rolle",          typ: "text",           hinweis: "Rolle aus der OE-Rollenliste (optional)" },
-      { id: "beteiligte",         label: "Beteiligte Einheiten",      typ: "list-oe-aufgabe",hinweis: "OE und deren konkreter Beitrag zum Prozess" },
-      { id: "datenarten",         label: "Verarbeitete Datenarten",   typ: "multi-daten" },
-      { id: "regelungen",         label: "Rechtsgrundlagen",          typ: "list-text",      hinweis: "Je Eintrag eine Grundlage (z. B. DSGVO Art. 6)" }
+      { id: "beteiligte",         label: "Beteiligte Einheiten",      typ: "list-oe-aufgabe",hinweis: "OE und deren konkreter Beitrag zum Prozess. Ist keine OE benannt, trägt der Eintrag stattdessen eine Rolle und die Phasennummern" },
+      { id: "datenInput",         label: "Eingehende Daten",          typ: "list-text",      hinweis: "Was den Prozess auslöst bzw. hereinkommt — je Zeile ein Eintrag" },
+      { id: "datenOutput",        label: "Ergebnis",                  typ: "list-text",      hinweis: "Was der Prozess hervorbringt — je Zeile ein Eintrag" },
+      { id: "datenspeicher",      label: "Verarbeitete Datenarten",   typ: "multi-daten" },
+      { id: "regelungen",         label: "Rechtsgrundlagen",          typ: "list-text",      hinweis: "Je Eintrag eine Grundlage (z. B. DSGVO Art. 6)" },
+      { id: "body",               label: "Volltext (Zweck, Prozessschritte)", typ: "textarea", hinweis: "Markdown. Die Prozessschritte werden aus diesem Text gelesen" }
     ]
   },
   daten: {
@@ -10342,8 +10336,7 @@ const FORMULAR_SCHEMA = {
     idPraefix:  "dtype-",
     felder: [
       { id: "name",               label: "Bezeichnung",               typ: "text",           pflicht: true },
-      { id: "datenkategorie",     label: "Datenkategorie",            typ: "select",         vokabular: "datenkategorie", pflicht: true },
-      { id: "zustaendigeEinheit", label: "Zuständige OE",             typ: "oe-select" },
+      { id: "zustaendigeEinheit", label: "Zuständige OE",             typ: "oe-select",      pflicht: true },
       { id: "schutzstufe",        label: "Schutzstufe (Datenschutz)", typ: "select",         vokabular: "schutzstufe",    pflicht: true },
       { id: "schutzbedarf",       label: "Schutzbedarf (BSI)",        typ: "select",         vokabular: "schutzbedarf",   pflicht: true },
       { id: "vertraulichkeit",    label: "Vertraulichkeit",           typ: "select",         vokabular: "vertraulichkeit",pflicht: true },
@@ -10364,8 +10357,6 @@ const FORMULAR_SCHEMA = {
       { id: "datum",                 label: "Datum / Fassung",       typ: "text",     hinweis: "z. B. 2024-01-01 oder Fassung vom …" },
       { id: "zustaendigeEinheit",    label: "Zuständige OE",         typ: "oe-select-null" },
       { id: "entscheidendesGremium", label: "Entscheidendes Gremium",typ: "text",     hinweis: "z. B. Stadtrat, Verwaltungsausschuss" },
-      { id: "kontext",               label: "Kontext / Geltungsbereich", typ: "textarea", hinweis: "Wann und für wen gilt diese Regelung?" },
-      { id: "entscheidung",          label: "Kernaussage / Entscheidung", typ: "textarea", hinweis: "Was wird geregelt oder festgelegt?" },
       { id: "body",                  label: "Volltext / Anmerkungen",typ: "textarea", hinweis: "Freier Text, Auszüge oder Verweise" }
     ]
   },
@@ -10865,7 +10856,7 @@ function runSearch(term) {
   const procHits  = PROZESSE.filter(p => p.titel.toLowerCase().includes(q) ||
                      resolve(p.zustaendigeEinheit).toLowerCase().includes(q));
   const datenHits = DATEN.filter(d => d.name.toLowerCase().includes(q) ||
-                     (d.datenkategorie || "").toLowerCase().includes(q));
+                     resolve(d.zustaendigeEinheit).toLowerCase().includes(q));
 
   const total = oeHits.length + procHits.length + datenHits.length;
   searchStat.textContent = total > 0 ? `${total} Treffer` : "Keine Treffer";
@@ -10904,7 +10895,7 @@ function runSearch(term) {
     el.className = "sr-item";
     el.setAttribute("role", "option");
     el.innerHTML = `<div class="sr-item-name">${esc(d.name)}</div>
-      <div class="sr-item-sub">${ssBadge(d.schutzstufe)} ${esc(d.datenkategorie)}</div>`;
+      <div class="sr-item-sub">${ssBadge(d.schutzstufe)} ${esc(resolve(d.zustaendigeEinheit))}</div>`;
     el.addEventListener("click", () => { closeSearch(); navigateToItem("daten", d.id); });
     return el;
   });
@@ -11203,12 +11194,13 @@ function _updateDatenSicht() {
     let show = true;
     if (q) {
       show = (d.name || "").toLowerCase().includes(q)
-          || (d.datenkategorie || "").toLowerCase().includes(q)
+          || resolve(d.zustaendigeEinheit).toLowerCase().includes(q)
           || (d.id || "").toLowerCase().includes(q);
     }
     if (show && field) {
       const val = { schutzstufe: d.schutzstufe, schutzbedarf: d.schutzbedarf,
-                    vertraulichkeit: d.vertraulichkeit, datenkategorie: d.datenkategorie,
+                    vertraulichkeit: d.vertraulichkeit,
+                    fachbereich: resolve(d.zustaendigeEinheit),
                     typ: d.typ || "datenspeicher" }[field];
       show = (val || "") === value;
     }
@@ -11226,7 +11218,7 @@ function _updateDatenSicht() {
   if (bar && label) {
     if (field) {
       const names = { schutzstufe: "Schutzstufe", schutzbedarf: "Schutzbedarf",
-                      vertraulichkeit: "Vertraulichkeit", datenkategorie: "Kategorie", typ: "Typ" };
+                      vertraulichkeit: "Vertraulichkeit", fachbereich: "Fachbereich", typ: "Typ" };
       label.textContent = `${names[field] || field}: ${value}`;
       bar.classList.add("aktiv");
     } else { bar.classList.remove("aktiv"); }
@@ -11277,15 +11269,13 @@ function renderDatenDetail(d) {
       })()}</span>
       <span class="meta-key">System</span>
       <span class="meta-val">${d.system ? esc(d.system) : "<span style='color:#bbb;font-size:13px'>—</span>"}</span>
-      <span class="meta-key">Datenkategorie</span>
-      <span class="meta-val">${esc(d.datenkategorie)}</span>
       <span class="meta-key">Schutzstufe</span>
       <span class="meta-val">${ssBadge(d.schutzstufe)}</span>
       <span class="meta-key">Schutzbedarf</span>
       <span class="meta-val">${sbBadge(d.schutzbedarf)}</span>
       <span class="meta-key">Vertraulichkeit</span>
       <span class="meta-val">${d.vertraulichkeit ? vtBadge(d.vertraulichkeit) : "<span style='color:#bbb;font-size:13px'>—</span>"}</span>
-      <span class="meta-key">Zust. Einheit</span>
+      <span class="meta-key">Zuständige OE</span>
       <span class="meta-val"><span class="chip chip-link oe-link" data-oe-id="${esc(d.zustaendigeEinheit)}">${esc(resolve(d.zustaendigeEinheit))}</span></span>
     </div>
     <div class="section">
@@ -11374,7 +11364,7 @@ function buildDatenListe() {
     item.setAttribute("tabindex", "0");
     item.innerHTML = `<div class="list-item-text">
         <div class="list-item-name">${esc(d.name)}</div>
-        <div class="list-item-sub">${ssBadge(d.schutzstufe)} ${sbBadge(d.schutzbedarf)} ${d.vertraulichkeit ? vtBadge(d.vertraulichkeit) : ""} &nbsp;${esc(d.datenkategorie)}</div>
+        <div class="list-item-sub">${ssBadge(d.schutzstufe)} ${sbBadge(d.schutzbedarf)} ${d.vertraulichkeit ? vtBadge(d.vertraulichkeit) : ""} &nbsp;${esc(resolve(d.zustaendigeEinheit))}</div>
       </div>`;
     item.addEventListener("click", () => navigateToItem("daten", d.id));
     item.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); navigateToItem("daten", d.id); }});
@@ -11442,20 +11432,6 @@ function renderRegelungDetail(r) {
         <span class="meta-val"><span class="chip chip-link oe-link" data-oe-id="${esc(r.zustaendigeEinheit)}">${esc(resolve(r.zustaendigeEinheit))}</span></span>` : ""}
       ${r.ersetzt ? `<span class="meta-key">Ersetzt</span><span class="meta-val">${esc(r.ersetzt)}</span>` : ""}
     </div>
-    ${r.kontext ? `<div class="section" style="margin-top:24px">
-      <div class="section-label">Kontext</div>
-      <p style="font-size:13px;color:#333;line-height:1.6">${esc(r.kontext)}</p>
-    </div>` : ""}
-    ${r.entscheidung ? `<div class="section" style="margin-top:20px">
-      <div class="section-label">Entscheidung</div>
-      <p style="font-size:13px;color:#333;line-height:1.6">${esc(r.entscheidung)}</p>
-    </div>` : ""}
-    ${(r.alternativen || []).length ? `<div class="section" style="margin-top:20px">
-      <div class="section-label">Verworfene Alternativen</div>
-      <ul style="margin:0;padding-left:18px;font-size:13px;color:#555;line-height:1.8">
-        ${r.alternativen.map(a => `<li>${esc(a)}</li>`).join("")}
-      </ul>
-    </div>` : ""}
     ${r.body ? `<div class="section" style="margin-top:20px">
       <div class="section-label">Volltext</div>
       <div class="reg-body-md">${_mdRender(r.body)}</div>
@@ -11760,6 +11736,11 @@ function renderInlineEdit(typ, datensatz, detailContentEl, detailPanelEl) {
 
   // Vorhandene Werte eintragen
   befuelleFormular(_editDaten, schema);
+  _bodyOffen = false;
+  if (typ === "prozess") {
+    _bodyOffen = true;
+    _prozessBodyNachladen(detailContentEl.querySelector("#ff-body"), _editDaten);
+  }
 
   // Speichern
   detailContentEl.querySelector("#inline-speichern").addEventListener("click", async () => {
@@ -12138,16 +12119,23 @@ function _listAddTextRow(items) {
   return row;
 }
 
-function _listAddOeRow(items, einheit = "", aufgabe = "") {
+// Der Bestand führt beteiligte in zwei Formen: {einheit, aufgabe} und
+// {rolle, phase, aufgabe}. Die Zeile zeigt beide. Leer gelassene Felder werden
+// beim Speichern nicht geschrieben — die Form der Datei bleibt erhalten.
+function _listAddOeRow(items, einheit = "", aufgabe = "", rolle = "", phase = "") {
   const oeOpts = ORG_UNITS.map(u => `<option value="${esc(u.id)}">${esc(u.name)}</option>`).join("");
   const row    = document.createElement("div");
   row.className = "ff-list-row ff-oe-aufgabe-row";
   row.innerHTML = `<select class="ff-input ff-oe-sel"><option value="">— OE wählen —</option>${oeOpts}</select>
+    <input type="text" class="ff-input ff-rolle-input" placeholder="Rolle" title="Rolle — falls keine OE benannt ist">
+    <input type="text" class="ff-input ff-phase-input" placeholder="Phase" title="Phasennummern, z. B. 1,2,3">
     <input type="text" class="ff-input ff-aufgabe-input" placeholder="Aufgabe / Beitrag">
     <button type="button" class="ff-remove-btn" aria-label="Entfernen">×</button>`;
   row.querySelector(".ff-remove-btn").addEventListener("click", () => row.remove());
-  row.querySelector(".ff-oe-sel").value             = einheit;
-  row.querySelector(".ff-aufgabe-input").value      = aufgabe;
+  row.querySelector(".ff-oe-sel").value        = einheit;
+  row.querySelector(".ff-rolle-input").value   = rolle;
+  row.querySelector(".ff-phase-input").value   = phase;
+  row.querySelector(".ff-aufgabe-input").value = aufgabe;
   items.appendChild(row);
   return row;
 }
@@ -12172,6 +12160,17 @@ function _verdrahteListButtons(body) {
 function _normalisiereDS(typ, ds) {
   if (!ds) return {};
   const flat = { ...ds };
+  if (typ === "prozess") {
+    // daten: {input, output, datenspeicher} → flache Formularfelder.
+    // Ohne diese Umsetzung findet befuelleFormular() die Werte nicht:
+    // die Maske fragt nach datenInput/datenOutput/datenspeicher, die Daten
+    // liefern sie verschachtelt unter daten.
+    const d = ds.daten || {};
+    flat.datenInput    = d.input  || [];
+    flat.datenOutput   = d.output || [];
+    flat.datenspeicher = (d.datenspeicher || []).map(x =>
+      typeof x === "string" ? x : (x.id || ""));
+  }
   if (typ === "daten") {
     // aufbewahrung: Nested → flache Felder für das Formular
     if (ds.aufbewahrung) {
@@ -12192,6 +12191,32 @@ function _normalisiereDS(typ, ds) {
     }
   }
   return flat;
+}
+
+// Der Prozess-Body (Zweck, Prozessschritte) steckt nicht in /api/prozesse —
+// die Liste fuehrt nur das Frontmatter. Er wird beim Oeffnen der Maske einzeln
+// nachgeladen. Solange er fehlt, steht _bodyOffen auf true; dann sendet
+// formulardatenLesen() kein body-Feld und der Rumpf in der Datei bleibt stehen.
+let _bodyOffen = false;   // true, solange der Prozess-Body noch nicht im Feld steht
+
+async function _prozessBodyNachladen(el, ds) {
+  if (!el) { _bodyOffen = false; return; }
+  if (typeof ds?.body === "string") {          // Ordner-Modus: Body liegt schon vor
+    el.value = ds.body;
+    _bodyOffen = false;
+    return;
+  }
+  const id = ds?._dateiname || ds?.id;
+  if (!id) { _bodyOffen = false; return; }
+  try {
+    const r = await fetch(`/api/prozesse/${encodeURIComponent(id)}?section=body`);
+    if (!r.ok) throw new Error(`Server: ${r.status}`);
+    el.value = await r.text();
+    _bodyOffen = false;
+  } catch (e) {
+    el.placeholder = "Volltext konnte nicht geladen werden \u2014 er bleibt beim Speichern unverändert.";
+    console.warn("Prozess-Body nicht geladen:", e);
+  }
 }
 
 function formOeffnen(typ, datensatz = null) {
@@ -12232,6 +12257,11 @@ function formOeffnen(typ, datensatz = null) {
 
   // Bei Bearbeitung: Felder vorausfüllen
   if (bearbeitung) befuelleFormular(_editDaten, schema);
+  _bodyOffen = false;
+  if (bearbeitung && typ === "prozess") {
+    _bodyOffen = true;
+    _prozessBodyNachladen(body.querySelector("#ff-body"), _editDaten);
+  }
 
   document.getElementById("form-modal").hidden = false;
   (bearbeitung
@@ -12294,7 +12324,8 @@ function befuelleFormular(ds, schema) {
         const listEl = document.getElementById(fid);
         if (!listEl || !Array.isArray(val)) break;
         const items = listEl.querySelector(".ff-list-items");
-        val.forEach(b => _listAddOeRow(items, b.einheit || "", b.aufgabe || ""));
+        val.forEach(b => _listAddOeRow(items, b.einheit || "", b.aufgabe || "",
+                                       b.rolle || "", b.phase == null ? "" : String(b.phase)));
         break;
       }
       case "multi-daten": {
@@ -12343,11 +12374,19 @@ function formulardatenLesen() {
       }
       case "list-oe-aufgabe": {
         const el = document.getElementById(fid);
+        // Ein Eintrag zählt, wenn er eine OE ODER eine Rolle trägt. Leere Felder
+        // fallen weg, damit {einheit, aufgabe} nicht um leere rolle/phase wächst.
         if (el) daten[feld.id] = Array.from(el.querySelectorAll(".ff-oe-aufgabe-row"))
-          .map(row => ({
-            einheit: row.querySelector(".ff-oe-sel")?.value || "",
-            aufgabe: row.querySelector(".ff-aufgabe-input")?.value.trim() || ""
-          })).filter(b => b.einheit);
+          .map(row => {
+            const e = {
+              einheit: row.querySelector(".ff-oe-sel")?.value || "",
+              rolle:   row.querySelector(".ff-rolle-input")?.value.trim() || "",
+              phase:   row.querySelector(".ff-phase-input")?.value.trim() || "",
+              aufgabe: row.querySelector(".ff-aufgabe-input")?.value.trim() || ""
+            };
+            Object.keys(e).forEach(k => { if (!e[k]) delete e[k]; });
+            return e;
+          }).filter(b => b.einheit || b.rolle);
         break;
       }
       case "multi-daten": {
@@ -12357,6 +12396,23 @@ function formulardatenLesen() {
       }
     }
   });
+  // Prozess: flache Formularfelder → verschachtelter daten-Block.
+  // datenspeicher wird von der ID-Liste in [{id: …}] überführt — das Format,
+  // das prozess_to_md() und der Bestand führen.
+  if (_formTyp === "prozess") {
+    daten.daten = {
+      input:  daten.datenInput  || [],
+      output: daten.datenOutput || [],
+      datenspeicher: (daten.datenspeicher || []).map(id => ({ id })),
+    };
+    delete daten.datenInput;
+    delete daten.datenOutput;
+    delete daten.datenspeicher;
+    // Body noch nicht nachgeladen? Dann nicht mitsenden — sonst überschriebe
+    // das leere Feld den Rumpf. prozess_to_md_merge() behält den vorhandenen.
+    if (_bodyOffen) delete daten.body;
+  }
+
   return daten;
 }
 
@@ -12410,7 +12466,6 @@ letzte-aktualisierung: ${heute}
     return `---
 id:               ${d.id}
 name:             ${d.name || ""}
-datenkategorie:   ${d.datenkategorie || ""}
 zustaendigeEinheit: ${d.zustaendigeEinheit || ""}
 
 klassifizierung:
@@ -12596,6 +12651,7 @@ function parseProzessMd(id, text) {
     daten:       meta.daten        || { input: [], output: [], datenspeicher: [] },
     regelungen:  meta.regelungen  || [],
     schritte,
+    body,
   };
 }
 
@@ -12626,7 +12682,6 @@ function parseDatenMd(id, text) {
     id:                 meta.id                 || id,
     _dateiname:         id,   // ursprünglicher Dateiname ohne .md — für korrektes Überschreiben
     name:               meta.name               || "",
-    datenkategorie:     meta.datenkategorie      || "",
     // YAML-Dateien nutzen kebab-case mit Umlaut; Schema nutzt camelCase — beide abfangen
     zustaendigeEinheit: meta.zustaendigeEinheit  || meta["zuständige-einheit"] || "",
     schutzstufe:        kl.schutzstufe           || "",
@@ -12655,9 +12710,6 @@ function parseRegelungMd(id, text) {
     entscheidendesGremium:meta["entscheidendes-gremium"] || "",
     ersetzt:              meta.ersetzt              || null,
     zustaendigeEinheit:   meta.zustaendigeEinheit   || meta["zuständige-einheit"] || "",
-    kontext:              meta.kontext              || "",
-    entscheidung:         meta.entscheidung         || "",
-    alternativen:         meta.alternativen         || [],
     body:                 body,
   };
 }
@@ -12858,9 +12910,9 @@ function _startseiteDS() {
     return "";
   }
 
-  // ── Datenkategorien (Top 10 + Rest) ───────────────────────────────────────
+  // ── Fachbereiche (Top 10 + Rest) ───────────────────────────────────────
   const katMap = {};
-  DATEN.forEach(d => { const k = d.datenkategorie || "—"; katMap[k] = (katMap[k]||0)+1; });
+  DATEN.forEach(d => { const k = resolve(d.zustaendigeEinheit) || "—"; katMap[k] = (katMap[k]||0)+1; });
   const katAll   = Object.entries(katMap).sort((a,b) => b[1]-a[1]);
   const katTop10 = katAll.slice(0, 10);
   const katRest  = katAll.slice(10).reduce((s,[,n]) => s+n, 0);
@@ -12913,9 +12965,9 @@ function _startseiteDS() {
 
     ${katTop10.length > 0 ? `
     <div class="tab-start-dist">
-      <h3>Datenkategorien (Top 10)</h3>
-      ${_tsDistHtmlKlickbar(katTop10, () => "", "datenkategorie")}
-      ${katRest > 0 ? `<div style="font-size:11px;color:#aaa;margin-top:4px">+ ${katRest} weitere in ${katAll.length - 10} Kategorien</div>` : ""}
+      <h3>Fachbereiche (Top 10)</h3>
+      ${_tsDistHtmlKlickbar(katTop10, () => "", "fachbereich")}
+      ${katRest > 0 ? `<div style="font-size:11px;color:#aaa;margin-top:4px">+ ${katRest} weitere in ${katAll.length - 10} Fachbereichen</div>` : ""}
     </div>` : ""}
 
     ${typEntries.length > 1 ? `

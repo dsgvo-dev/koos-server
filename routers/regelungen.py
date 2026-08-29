@@ -12,6 +12,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request, Response
 
 import config
+from services import parser
 from services import git_service
 from services.parser import parse_frontmatter, cache_invalidieren
 
@@ -45,9 +46,6 @@ def _parse(dateiname: str, text: str) -> dict:
         "entscheidendesGremium": meta.get("entscheidendes-gremium", ""),
         "ersetzt":               meta.get("ersetzt", None),
         "zustaendigeEinheit":    meta.get("zustaendigeEinheit") or meta.get("zuständige-einheit", ""),
-        "kontext":               meta.get("kontext", ""),
-        "entscheidung":          meta.get("entscheidung", ""),
-        "alternativen":          meta.get("alternativen", []),
         "body":                  body,
     }
 
@@ -93,9 +91,10 @@ async def put_regelung(reg_id: str, request: Request) -> dict:
         import yaml
         data: dict = await request.json()
         begruendung = data.pop("_begruendung", None)
-        clean = {k: v for k, v in data.items() if not k.startswith("_") and k != "body"}
-        body = data.get("body", "")
-        md_text = f"---\n{yaml.dump(clean, allow_unicode=True, default_flow_style=False, sort_keys=False)}---\n\n{body}"
+        # Merge statt Überschreiben: erhält ersetzt, version, stand,
+        # basierend_auf, verzahnt_mit und alles, was die Maske nicht führt.
+        # Setzt außerdem entscheidendesGremium -> entscheidendes-gremium zurück.
+        md_text = parser.regelung_to_md_merge(data, datei if datei.exists() else None)
     else:
         md_text = (await request.body()).decode("utf-8")
     datei.write_text(md_text, encoding="utf-8")

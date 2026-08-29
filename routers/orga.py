@@ -44,7 +44,10 @@ async def put_orga(request: Request) -> dict:
     else:
         begruendung = None
         einheiten = body
-    yaml_text = parser.orga_to_yaml(einheiten)
+    # Merge statt Überschreiben: erhält Kommentarkopf und den Schlüssel `name`.
+    yaml_text = parser.orga_to_yaml_merge(
+        einheiten, config.ORGA_FILE if config.ORGA_FILE.exists() else None
+    )
     config.ORGA_FILE.write_text(yaml_text, encoding="utf-8")
     git_service.commit([config.ORGA_FILE], "orga.yaml aktualisiert",
                        begruendung=begruendung)
