@@ -1413,6 +1413,22 @@ function mStart(){
       ${kachel(REGELUNGEN.length,'Regelungen')}
     </div>
 
+    <div class="sektion-label" style="margin:30px 0 10px;max-width:1000px">Schutzstufen der Datenspeicher ${herkunftHinweis()}</div>
+    <div style="max-width:940px">
+      ${(()=>{
+        const st={A:0,B:0,C:0,D:0,E:0}; let ohne=0;
+        DSTORES.forEach(d=>{ if(st[d.schutz]!=null) st[d.schutz]++; else ohne++; });
+        const max=Math.max(...Object.values(st),ohne,1);
+        const zeile=(label,n,cls)=>`<div style="display:flex;align-items:center;gap:10px;margin:5px 0">
+          <span class="pill ${cls}" style="width:78px;text-align:center">${label}</span>
+          <div class="balken" style="flex:1;margin:0"><i style="width:${Math.round(n/max*100)}%"></i></div>
+          <span class="num" style="width:46px;text-align:right;font-variant-numeric:tabular-nums">${n}</span></div>`;
+        return Object.entries(st).map(([se,n])=>zeile('Stufe '+se,n,se==='E'||se==='D'?'err':se==='C'?'warn':'')).join('')
+             + zeile('nicht ableitbar',ohne,'err');
+      })()}
+      <div style="margin-top:12px"><button class="btn klein" data-go="dashboard:">Volle Auswertung im Dashboard \u2192</button></div>
+    </div>
+
     <div class="sektion-label" style="margin:30px 0 10px;max-width:1000px">Gemessene Lücken ${herkunftHinweis()}</div>
     <div class="karten">
       ${kachel(k.ohneDS.length,'VT ohne Datenspeicher','<span class="pill err">keine Schutzstufe ableitbar</span>')}
