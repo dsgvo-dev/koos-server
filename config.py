@@ -42,6 +42,19 @@ GUI_PATH: Path = Path(os.environ.get(
 # Static-Files: DATA_DIR für zusätzliche statische Ressourcen
 STATIC_DIR: Path = DATA_DIR
 
+# ── Maßnahmen- und Gefährdungskatalog ─────────────────────────────────────────
+# Der Katalog liegt bewusst NICHT unter DATA_DIR: er ist DSMS-Wissen und wird
+# dort gepflegt, wo die vier Generatoren (tom_, bedrohungen_, baseline_,
+# ergaenzend_generator.py) ihn lesen. Der Server liefert ihn nur aus.
+# Fehlt das Verzeichnis, antworten die Endpunkte mit einer leeren Liste —
+# der Server startet trotzdem.
+KATALOG_DIR: Path = Path(os.environ.get(
+    "KOOS_KATALOG_DIR",
+    str(Path(__file__).parent.parent.parent / "dsms-knowledge" / "toms")
+)).resolve()
+KATALOG_TOM_DIR:    Path = KATALOG_DIR / "massnahmen"
+KATALOG_THREAT_DIR: Path = KATALOG_DIR / "gefaehrdungen"
+
 # ── Ollama / LLM ──────────────────────────────────────────────────────────────
 OLLAMA_URL:   str = os.environ.get("OLLAMA_URL",   "http://localhost:11434")
 OLLAMA_MODEL: str = os.environ.get("OLLAMA_MODEL", "llama3.2")

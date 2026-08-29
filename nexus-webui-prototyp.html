@@ -886,13 +886,15 @@ async function gebuendelt(liste, fn, breite, melde){
     }}));
   return out.filter(Boolean);
 }
-/* Ein Katalog. Die Verknüpfungen aus DS-TOM sind am 2026-08-10 in
-   threat_definitions/ übertragen worden (siehe UEBERTRAGUNG-*.md dort):
-   81 Gefährdungen, 127 Maßnahmen, 384 Kanten, keine toten Verweise.
-   Die Generatoren der Vorgehensweise lesen denselben Katalog. */
-const KATALOG_BASIS='/dsms-knowledge/_input/vorgehensweise/assets';
+/* Ein Katalog, gepflegt in dsms-knowledge/toms/ — dort lesen ihn auch die
+   vier Generatoren (tom_, bedrohungen_, baseline_, ergaenzend_generator.py),
+   die _daten/tom/ erzeugen. Am 29.08.2026 von der aelteren Kopie unter
+   _input/vorgehensweise/assets/ hierher umgestellt: die trug 127 Massnahmen
+   und kannte TOM-VIDEO-006 nicht, das in _daten/tom/ verwendet wird.
+   Ueber die REST-API kommen dieselben Daten aus /api/tom/*. */
+const KATALOG_BASIS='/dsms-knowledge/toms';
 async function kataloge(art){
-  const ordner = art==='tom' ? 'tom_definitions' : 'threat_definitions';
+  const ordner = art==='tom' ? 'massnahmen' : 'gefaehrdungen';
   let namen;
   try{
     const r=await fetch(`${KATALOG_BASIS}/${ordner}/`,{cache:'no-store'});

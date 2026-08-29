@@ -150,7 +150,11 @@ async def put_vvt(vvt_id: str, request: Request, force: bool = Query(False, desc
                 "msg": "Verwaiste Referenz(en) in prozesse:/datenspeicher:",
                 **pruefung,
             })
-        md_text = parser.vvt_to_md(data)
+        # Feldtreu speichern: nur die uebergebenen Felder aendern, alles andere
+        # in der Datei erhalten -- `kontextprofil`, die Belege an den
+        # datenspeicher-Eintraegen und den Markdown-Body. Ohne den Merge
+        # schriebe vvt_to_md() die Datei aus der Feldliste des Parsers neu.
+        md_text = parser.vvt_to_md_merge(data, datei if datei.exists() else None)
     else:
         md_text = (await request.body()).decode("utf-8")
 

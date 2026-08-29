@@ -881,6 +881,84 @@ def vvt_to_md(vvt: dict) -> str:
     return result
 
 
+def vvt_to_md_merge(incoming: dict, existing_path: "Path | None" = None) -> str:
+    """
+    Sicherer Rund-Trip fuer VVT-Dateien -- Gegenstueck zu daten_to_md_merge().
+
+    vvt_to_md() serialisiert nur die Felder, die parse_vvt_md() kennt. Alles
+    andere in der Datei ginge beim Speichern verloren: `kontextprofil`
+    (menschliche Festlegung, Grundlage der Kontextregeln K2/K3),
+    das Feld `beleg` an den Eintraegen unter `datenspeicher:` sowie jede
+    Zeilenumbruchform der langen Textbloecke. Diese Funktion liest die
+    vorhandene Datei und aktualisiert nur, was im incoming-Dict steht.
+
+    incoming: Dict wie parse_vvt_md() oder das UI-Formular es liefert.
+    existing_path: Pfad zur vorhandenen .md-Datei (oder None fuer Neuanlage).
+    """
+    if existing_path and existing_path.exists():
+        _roh = existing_path.read_text(encoding="utf-8")
+        orig_meta, _ = rt_frontmatter(_roh)
+        trenner = body_trenner(_roh)
+        body = roh_body(_roh)
+    else:
+        orig_meta, body, trenner = {}, "", "\n"
+
+    # `uid` wird bewusst nicht zurueckgeschrieben. Der Parser liefert sie immer
+    # als Text (str()), in den Dateien steht sie teils als Zahl. Ein Rueckschreiben
+    # wuerde bei jedem Speichern den Typ aendern -- und bei den Eintraegen mit
+    # fuehrender Null (uid: 014) den bereits von YAML verfaelschten Oktalwert
+    # festschreiben. Das ist ein Datenbefund, kein Speicherproblem: solange er
+    # offen ist, laesst der Schreibpfad das Feld unangetastet.
+    for field in ("id", "titel", "status", "organisationseinheit",
+                  "zweck", "rechtsgrundlage", "kategorien_betroffener",
+                  "kategorien_daten", "empfaenger", "transfer_drittland",
+                  "loeschfrist", "software_verarbeitungsmittel",
+                  "leika_id", "ozg_id"):
+        if field in incoming and incoming[field] is not None:
+            # Nur schreiben, wenn sich der Wert wirklich aendert. Sonst wuerde
+            # der ruamel-Scalar samt seiner Zeilenumbruchform (>- , ' ') durch
+            # einen nackten String ersetzt -- die Datei aendert sich dann in
+            # jeder Zeile, ohne dass inhaltlich etwas geschehen ist.
+            if orig_meta.get(field) != incoming[field]:
+                _setze(orig_meta, field, incoming[field])
+
+    # datenspeicher: vorhandene Eintraege samt `beleg` behalten, Reihenfolge
+    # und Bestand aber aus incoming uebernehmen.
+    if "datenspeicher" in incoming:
+        alt = {}
+        for e in (orig_meta.get("datenspeicher") or []):
+            if isinstance(e, dict) and e.get("id"):
+                alt[e["id"]] = e
+            elif isinstance(e, str):
+                alt[e] = {"id": e}
+        neu_ids = _id_liste(incoming["datenspeicher"])
+        if neu_ids != list(alt.keys()):
+            _setze(orig_meta, "datenspeicher",
+                   [alt.get(sid, {"id": sid}) for sid in neu_ids])
+
+    for field in ("tom", "prozesse"):
+        if field in incoming:
+            neu_ids = _id_liste(incoming[field])
+            if neu_ids != _id_liste(orig_meta.get(field)):
+                _setze(orig_meta, field, neu_ids)
+
+    if "quelle_basis_id" in incoming and \
+            orig_meta.get("quelle-basis-id") != incoming["quelle_basis_id"]:
+        _setze(orig_meta, "quelle-basis-id", incoming["quelle_basis_id"])
+    if "letzte_aktualisierung" in incoming and \
+            str(orig_meta.get("letzte-aktualisierung") or "") != str(incoming["letzte_aktualisierung"]):
+        _setze(orig_meta, "letzte-aktualisierung", incoming["letzte_aktualisierung"])
+
+    for drop in ("_dateiname", "body", "quelle_basis_id", "letzte_aktualisierung"):
+        orig_meta.pop(drop, None)
+
+    frontmatter = yaml_dump(orig_meta)
+    result = f"---\n{frontmatter}---\n"
+    if body:
+        result += f"{trenner}{body}"
+    return result
+
+
 # ── regelungen/*.md ──────────────────────────────────────────────────────────
 
 def parse_regelung_md(dateiname: str, text: str) -> dict:

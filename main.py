@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 import config
-from routers import orga, prozesse, daten, regelungen, stats, llm, chat, koos_config, vvt
+from routers import orga, prozesse, daten, regelungen, stats, llm, chat, koos_config, vvt, tom
 from services import git_service
 
 # ── Logging ───────────────────────────────────────────────────────────────────
@@ -81,6 +81,7 @@ app.include_router(llm.router)
 app.include_router(chat.router)
 app.include_router(koos_config.router)
 app.include_router(vvt.router)
+app.include_router(tom.router)
 
 
 # ── Audit-Log-Endpunkt ────────────────────────────────────────────────────────
