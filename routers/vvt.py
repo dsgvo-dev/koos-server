@@ -14,7 +14,7 @@ GET    /api/vvt/{id}/raw              → Rohtext der .md-Datei
 
 Bezug: ADR 001 (documentation/entscheidungen/001-vvt-wohnort.md) — VVT lebt
 im KOOS-Server, nicht im DSMS. Schutzstufe wird gemäß Richtlinie zur
-Datenklassifizierung (reg-klassifizierung-001.md, Punkt 4.2) ausschließlich
+Datenklassifizierung (reg-klassifizierung.md, Punkt 4.2) ausschließlich
 an dstore-* geführt und hier nur abgeleitet, nie am VVT selbst gespeichert.
 """
 from __future__ import annotations

@@ -150,7 +150,6 @@ def search(
                 "id":            d["id"],
                 "name":          d["name"],
                 "typ":           d.get("typ", ""),
-                "datenkategorie": d.get("datenkategorie", ""),
                 "schutzstufe":   d.get("schutzstufe", ""),
             }
             for d in alle_d if _treffer(d, q)
@@ -208,7 +207,6 @@ def get_querverweise(daten_id: str) -> dict:
             "id":             daten_obj["id"],
             "name":           daten_obj["name"],
             "typ":            daten_obj.get("typ", ""),
-            "datenkategorie": daten_obj.get("datenkategorie", ""),
             "schutzstufe":    daten_obj.get("schutzstufe", ""),
             "schutzbedarf":   daten_obj.get("schutzbedarf", ""),
             "vertraulichkeit": daten_obj.get("vertraulichkeit", ""),

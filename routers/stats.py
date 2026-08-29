@@ -83,8 +83,8 @@ def get_stats_daten() -> dict:
         if not d.get("aufbewahrung", {}).get("frist")
     ]
 
-    # Kategorien
-    kategorien = Counter(d.get("datenkategorie", "—") or "—" for d in daten)
+    # Fachbereiche (datenkategorie am 2026-08-15 entfallen, ADR 013)
+    fachbereiche = Counter(d.get("zustaendigeEinheit", "—") or "—" for d in daten)
 
     return {
         "gesamt": len(daten),
@@ -93,7 +93,7 @@ def get_stats_daten() -> dict:
             "schutzstufe":   dict(Counter(d.get("schutzstufe", "—") or "—" for d in daten)),
             "schutzbedarf":  dict(Counter(d.get("schutzbedarf", "—") or "—" for d in daten)),
             "vertraulichkeit": dict(Counter(d.get("vertraulichkeit", "—") or "—" for d in daten)),
-            "datenkategorie": dict(kategorien),
+            "fachbereich":   dict(fachbereiche),
         },
         "vollstaendigkeit": {
             "ohne_schutzstufe":  {"anzahl": len(fehlend_schutzstufe),  "ids": fehlend_schutzstufe[:20]},
@@ -132,7 +132,6 @@ def get_ohne_prozess() -> dict:
             "id":            d["id"],
             "name":          d["name"],
             "typ":           d.get("typ", ""),
-            "datenkategorie": d.get("datenkategorie", ""),
             "schutzstufe":   d.get("schutzstufe", ""),
             "zustaendigeEinheit": d.get("zustaendigeEinheit", ""),
         }
