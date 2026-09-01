@@ -429,6 +429,21 @@ def _setze(meta: Any, key: str, val: Any) -> None:
     ändert, Zeichen für Zeichen dieselbe."""
     if key in meta and meta[key] == val:
         return
+    # Ein leer gelassenes Feld der Maske schreibt nichts, wo ohnehin nichts
+    # steht. Zwei Fälle:
+    #   der Schlüssel fehlt in der Datei  → er wird nicht angelegt. Sonst wüchse
+    #     jede Datei bei jedem Speichern um Zeilen wie
+    #     `entscheidendes-gremium: ''`, die nichts aussagen — am 2026-09-01 in
+    #     sieben von dreizehn Regelungen gemessen.
+    #   der Schlüssel steht da, ist aber leer → seine Schreibweise bleibt. Sonst
+    #     würde `ersetzt: ~` bei jedem Speichern zu `ersetzt: ''`.
+    # Ein Schlüssel MIT Wert darf weiterhin geleert werden: Löschen über die
+    # Maske bleibt möglich.
+    def _leer(v):
+        return v is None or v == "" or v == [] or v == {}
+
+    if _leer(val) and (key not in meta or _leer(meta.get(key))):
+        return
     meta[key] = val
 
 

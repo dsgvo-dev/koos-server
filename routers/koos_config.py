@@ -1,6 +1,7 @@
 """
 KOOS Server – Router: Konfiguration
-GET  /api/config           → Auth-Konfiguration aus koos.yaml (superadminHash, subadmins)
+GET  /api/config           → Konfiguration aus koos.yaml: Auth (superadminHash,
+                             subadmins), Organisation, kontrolliertes Vokabular
 GET  /api/config/dashboard → Kombinierten Stats-Überblick für das Admin-Dashboard
 """
 from __future__ import annotations
@@ -55,6 +56,9 @@ def get_config() -> dict:
     return {
         "superadminHash": superadmin_hash,
         "subadmins":      subadmins,
+        # Kontrolliertes Vokabular — koos.yaml ist die alleinige Quelle (E5).
+        # Das Frontend befüllt seine Konstante VOKABULAR hieraus.
+        "vokabular":      daten.get("vokabular") or {},
         "organisation": {
             "name":              org.get("name", ""),
             "kurzname":          org.get("kurzname", ""),

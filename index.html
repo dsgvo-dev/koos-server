@@ -846,6 +846,7 @@
     .ff-input[disabled] { background: #f5f5f5; color: #888; }
     .ff-textarea { resize: vertical; min-height: 70px; }
     .ff-hinweis { font-size: 11px; color: #888; margin-top: 4px; }
+    .ff-fehler { border-color: #c00 !important; background: #fff5f5; }
     .ff-id-wrap { display: flex; align-items: center; gap: 0; }
     .ff-id-prefix {
       padding: 8px 10px; background: #f0f0f0; border: 1.5px solid #ddd;
@@ -10244,6 +10245,14 @@ async function ladeServerConfig() {
     if (data.superadminHash) CONFIG.superadminHash = data.superadminHash;
     if (Array.isArray(data.subadmins)) CONFIG.subadmins = data.subadmins;
     if (data.organisation) CONFIG.organisation = data.organisation;
+    // Kontrolliertes Vokabular aus koos.yaml (E5). Die Listen stehen dort als
+    // {Wert: Erläuterung}; für die Maske zählen die Schlüssel. Eine reine
+    // Liste (generische-rollen) wird unverändert übernommen.
+    for (const [name, eintrag] of Object.entries(data.vokabular || {})) {
+      VOKABULAR[name] = Array.isArray(eintrag)
+        ? eintrag
+        : Object.keys(eintrag || {});
+    }
     // App-Titel setzen
     const org = data.organisation || {};
     const titelEl = document.getElementById("app-title");
@@ -10294,9 +10303,12 @@ const VOKABULAR = {
   schutzbedarf:    ["normal","hoch","sehr hoch"],
   vertraulichkeit: ["öffentlich","intern","vertraulich","streng vertraulich"],
   // datenkategorie am 2026-08-15 entfallen (ADR 013)
-  prozessStatus:   ["aktiv","inaktiv","entwurf"],
-  regelungTyp:     ["Gesetz","Satzung","Dienstanweisung","Richtlinie","Geschäftsordnung","Vertrag","Beschluss","Norm"],
-  regelungStatus:  ["aktiv","ersetzt","aufgehoben"]
+  //
+  // regelungStatus, regelungTyp und prozessStatus stehen hier NICHT mehr.
+  // koos.yaml ist ihre alleinige Quelle (E5); ladeServerConfig() trägt sie
+  // aus /api/config nach. Bewusst ohne Notwerte: eine zweite Liste im HTML
+  // veraltet still, und genau das war der Fehler bis zum 2026-09-01.
+  // Fehlt eine Liste, sperrt die Maske das Feld und das Speichern (F3).
 };
 
 // ── Formular-Schema ───────────────────────────────────────────────────────
@@ -10319,7 +10331,7 @@ const FORMULAR_SCHEMA = {
     idPraefix:  "proc-",
     felder: [
       { id: "titel",              label: "Titel",                     typ: "text",           pflicht: true },
-      { id: "status",             label: "Status",                    typ: "select",         werte: VOKABULAR.prozessStatus, pflicht: true },
+      { id: "status",             label: "Status",                    typ: "select",         vokabular: "prozessStatus", pflicht: true },
       { id: "zustaendigeEinheit", label: "Zuständige OE",             typ: "oe-select",      pflicht: true },
       { id: "zustaendigeRolle",   label: "Zuständige Rolle",          typ: "text",           hinweis: "Rolle aus der OE-Rollenliste (optional)" },
       { id: "beteiligte",         label: "Beteiligte Einheiten",      typ: "list-oe-aufgabe",hinweis: "OE und deren konkreter Beitrag zum Prozess. Ist keine OE benannt, trägt der Eintrag stattdessen eine Rolle und die Phasennummern" },
@@ -10354,6 +10366,7 @@ const FORMULAR_SCHEMA = {
       { id: "name",                  label: "Bezeichnung",           typ: "text",     pflicht: true },
       { id: "typ",                   label: "Typ",                   typ: "select",   vokabular: "regelungTyp", pflicht: true },
       { id: "status",                label: "Status",                typ: "select",   vokabular: "regelungStatus" },
+      { id: "ersetzt",               label: "Ersetzt durch",         typ: "reg-select-null", hinweis: "Nachfolgeregelung — nur zu füllen, wenn der Status auf 'ersetzt' steht" },
       { id: "datum",                 label: "Datum / Fassung",       typ: "text",     hinweis: "z. B. 2024-01-01 oder Fassung vom …" },
       { id: "zustaendigeEinheit",    label: "Zuständige OE",         typ: "oe-select-null" },
       { id: "entscheidendesGremium", label: "Entscheidendes Gremium",typ: "text",     hinweis: "z. B. Stadtrat, Verwaltungsausschuss" },
@@ -11744,6 +11757,11 @@ function renderInlineEdit(typ, datensatz, detailContentEl, detailPanelEl) {
 
   // Speichern
   detailContentEl.querySelector("#inline-speichern").addEventListener("click", async () => {
+    const beanstandungen = maskeBeanstandungen(detailContentEl);
+    if (beanstandungen.length) {
+      zeigeToast("Nicht gespeichert — " + beanstandungen.join("; "), "err", 8000);
+      return;
+    }
     const daten      = formulardatenLesen();
     const begruendung = (detailContentEl.querySelector("#inline-begruendung")?.value || "").trim();
     const spinner = document.getElementById("sync-spinner");
@@ -12063,10 +12081,26 @@ function formFeldHtml(feld) {
       input = `<textarea id="${fid}" name="${feld.id}" class="ff-input ff-textarea" rows="3"></textarea>`;
       break;
     case "select": {
-      const werte = feld.werte || VOKABULAR[feld.vokabular] || [];
-      const opts  = werte.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
-      input = `<select id="${fid}" name="${feld.id}" class="ff-input"${feld.pflicht ? " required" : ""}>
-        <option value="">— bitte wählen —</option>${opts}</select>`;
+      // Ist die Werteliste nicht geladen, bleibt das Feld gesperrt und
+      // markiert; maskeBeanstandungen() weist das Speichern dann ab (F3).
+      const werte = feld.werte || VOKABULAR[feld.vokabular];
+      const fehlt = !Array.isArray(werte) || werte.length === 0;
+      const opts  = (werte || []).map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
+      const leer  = fehlt ? "— Werteliste nicht geladen —" : "— bitte wählen —";
+      input = `<select id="${fid}" name="${feld.id}" class="ff-input${fehlt ? " ff-fehler" : ""}"${feld.pflicht ? " required" : ""}${fehlt ? ` disabled data-vokabular-fehlt="${esc(feld.vokabular || feld.id)}"` : ""}>
+        <option value="">${leer}</option>${opts}</select>`;
+      break;
+    }
+    case "reg-select-null": {
+      // Auswahl aus den geladenen Regelungen — gebaut wie oe-select-null.
+      // Gespeichert wird die Kennung, angezeigt der Name. Ein freies Textfeld
+      // ließe eine Kennung zu, die es nicht gibt; genau solche toten Verweise
+      // haben den Suchindex unbrauchbar gemacht.
+      // Die eigene Regelung steht nicht zur Wahl: sie ersetzt sich nicht selbst.
+      const regs = REGELUNGEN.filter(r => !_editDaten || r.id !== _editDaten.id);
+      const opts = regs.map(r => `<option value="${esc(r.id)}">${esc(r.name || r.id)}</option>`).join("");
+      input = `<select id="${fid}" name="${feld.id}" class="ff-input">
+        <option value="">— keine —</option>${opts}</select>`;
       break;
     }
     case "oe-select":
@@ -12304,7 +12338,27 @@ function befuelleFormular(ds, schema) {
     if (val === undefined || val === null || val === "") return;
 
     switch (feld.typ) {
-      case "text": case "textarea": case "select":
+      case "select":
+      case "reg-select-null": {
+        const el = document.getElementById(fid);
+        if (!el) break;
+        el.value = val;
+        // Der gespeicherte Wert steht nicht in der Werteliste. Ohne diesen
+        // Zweig bliebe das Feld leer und der Wert ginge beim Speichern
+        // verloren — das war der Schaden vom 2026-09-01. Jetzt wird er
+        // angezeigt, markiert und das Speichern abgewiesen (F4).
+        if (el.value !== String(val)) {
+          const opt = document.createElement("option");
+          opt.value       = String(val);
+          opt.textContent = `${val} — nicht im Vokabular`;
+          el.insertBefore(opt, el.options[1] || null);
+          el.value = String(val);
+          el.dataset.wertUnbekannt = String(val);
+          el.classList.add("ff-fehler");
+        }
+        break;
+      }
+      case "text": case "textarea":
       case "oe-select": case "oe-select-null": {
         const el = document.getElementById(fid);
         if (el) el.value = val;
@@ -12345,6 +12399,23 @@ document.getElementById("form-abbrechen").addEventListener("click", () => {
   document.getElementById("form-modal").hidden = true;
 });
 
+// ── Prüfung vor dem Speichern ─────────────────────────────────────────────
+// Zwei Fälle, in denen nicht gespeichert werden darf:
+//   F3  eine Werteliste ist nicht geladen  → das Feld wäre leer
+//   F4  ein Wert steht nicht im Vokabular  → er ginge verloren
+// Gibt die Klartextmeldungen zurück; eine leere Liste heißt: in Ordnung.
+function maskeBeanstandungen(wurzel) {
+  const w = wurzel || document;
+  const meldungen = [];
+  w.querySelectorAll("[data-vokabular-fehlt]").forEach(el => {
+    meldungen.push(`Werteliste „${el.dataset.vokabularFehlt}" nicht geladen`);
+  });
+  w.querySelectorAll("[data-wert-unbekannt]").forEach(el => {
+    meldungen.push(`Wert „${el.dataset.wertUnbekannt}" steht nicht im Vokabular`);
+  });
+  return meldungen;
+}
+
 // ── Formulardaten auslesen ────────────────────────────────────────────────
 function formulardatenLesen() {
   const schema = FORMULAR_SCHEMA[_formTyp];
@@ -12361,7 +12432,8 @@ function formulardatenLesen() {
   schema.felder.forEach(feld => {
     const fid = `ff-${feld.id}`;
     switch (feld.typ) {
-      case "text": case "textarea": case "select": case "oe-select": case "oe-select-null": {
+      case "text": case "textarea": case "select":
+      case "oe-select": case "oe-select-null": case "reg-select-null": {
         const el = document.getElementById(fid);
         if (el) daten[feld.id] = el.value.trim();
         break;
@@ -12510,6 +12582,12 @@ ${rol}${sf ? `\n    sonderfunktionen:\n${sf}` : ""}${d.hinweis ? `\n    hinweis:
 document.getElementById("form-speichern").addEventListener("click", async () => {
   const idEl = document.getElementById("ff-id");
   if (!_editDaten && !idEl.value.trim()) { idEl.focus(); idEl.reportValidity(); return; }
+
+  const beanstandungen = maskeBeanstandungen(document.getElementById("form-body"));
+  if (beanstandungen.length) {
+    zeigeToast("Nicht gespeichert — " + beanstandungen.join("; "), "err", 8000);
+    return;
+  }
 
   const daten      = formulardatenLesen();
   const begruendung = (document.getElementById("form-begruendung")?.value || "").trim();
