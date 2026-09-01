@@ -706,18 +706,18 @@ async def _handle_call_tool(ctx, params: CallToolRequestParams) -> CallToolResul
         query = arguments.get("query", "")
         parent_id = arguments.get("parent_id")
         results = _loader.search_oe(query=query, parent_id=parent_id)
-        return [TextContent(
+        return CallToolResult(content=[TextContent(
             type="text",
             text=json.dumps(results, ensure_ascii=False, indent=2)
-        )]
+        )])
 
     elif name == "koos_get_oe_tree":
         root_id = arguments.get("root_id")
         results = _loader.get_oe_tree(root_id=root_id)
-        return [TextContent(
+        return CallToolResult(content=[TextContent(
             type="text",
             text=json.dumps(results, ensure_ascii=False, indent=2)
-        )]
+        )])
 
     elif name == "koos_search_prozess":
         query = arguments.get("query", "")
@@ -727,20 +727,20 @@ async def _handle_call_tool(ctx, params: CallToolRequestParams) -> CallToolResul
             query=query, oe_id=oe_id, datenart_id=datenart_id
         )
         results = _hybrid_erweitern(_loader, "proc", results, query)
-        return [TextContent(
+        return CallToolResult(content=[TextContent(
             type="text",
             text=json.dumps(results, ensure_ascii=False, indent=2)
-        )]
+        )])
 
     elif name == "koos_search_daten":
         query = arguments.get("query", "")
         schutzstufe = arguments.get("schutzstufe")
         results = _loader.search_daten(query=query, schutzstufe=schutzstufe)
         results = _hybrid_erweitern(_loader, "dstore", results, query)
-        return [TextContent(
+        return CallToolResult(content=[TextContent(
             type="text",
             text=json.dumps(results, ensure_ascii=False, indent=2)
-        )]
+        )])
 
     elif name == "koos_search_vvt":
         query = arguments.get("query", "")
@@ -748,10 +748,10 @@ async def _handle_call_tool(ctx, params: CallToolRequestParams) -> CallToolResul
         prozess_id = arguments.get("prozess_id")
         results = _loader.search_vvt(query=query, oe_id=oe_id, prozess_id=prozess_id)
         results = _hybrid_erweitern(_loader, "vvt", results, query)
-        return [TextContent(
+        return CallToolResult(content=[TextContent(
             type="text",
             text=json.dumps(results, ensure_ascii=False, indent=2)
-        )]
+        )])
 
     elif name == "koos_search_regelung":
         query = arguments.get("query", "")
@@ -761,44 +761,44 @@ async def _handle_call_tool(ctx, params: CallToolRequestParams) -> CallToolResul
             query=query, typ=typ, zustaendige_einheit=zustaendige_einheit
         )
         results = _hybrid_erweitern(_loader, "reg", results, query)
-        return [TextContent(
+        return CallToolResult(content=[TextContent(
             type="text",
             text=json.dumps(results, ensure_ascii=False, indent=2)
-        )]
+        )])
 
     elif name == "koos_get_regelung_volltext":
         reg_id = arguments.get("reg_id", "")
         if not reg_id:
-            return [TextContent(
+            return CallToolResult(content=[TextContent(
                 type="text", text="Fehler: reg_id erforderlich."
-            )]
+            )])
         result = _loader.get_regelung_volltext(reg_id=reg_id)
         if result is None:
-            return [TextContent(
+            return CallToolResult(content=[TextContent(
                 type="text",
                 text=f"⚠ Regelung '{reg_id}' nicht gefunden."
-            )]
-        return [TextContent(
+            )])
+        return CallToolResult(content=[TextContent(
             type="text",
             text=json.dumps(result, ensure_ascii=False, indent=2)
-        )]
+        )])
 
     elif name == "koos_get_context":
         oe_id = arguments.get("oe_id", "")
         if not oe_id:
-            return [TextContent(
+            return CallToolResult(content=[TextContent(
                 type="text", text="Fehler: oe_id erforderlich."
-            )]
+            )])
         context = _loader.get_context(oe_id=oe_id)
-        return [TextContent(
+        return CallToolResult(content=[TextContent(
             type="text",
             text=json.dumps(context, ensure_ascii=False, indent=2)
-        )]
+        )])
 
     else:
-        return [TextContent(
+        return CallToolResult(content=[TextContent(
             type="text", text=f"Unbekanntes Tool: {name}"
-        )]
+        )])
 
 
 # ══════════════════════════════════════════════════════════════════════════════
