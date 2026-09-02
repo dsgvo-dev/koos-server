@@ -17,7 +17,7 @@ from services.parser import cache_invalidieren
 
 router = APIRouter(prefix="/api/daten", tags=["Daten"])
 
-_ID_RE = re.compile(r"^[a-z0-9][a-z0-9\-]{0,63}$")
+_ID_RE = re.compile(r"^[a-z0-9][a-z0-9\-]{0,126}$")
 
 
 def _datei(daten_id: str) -> Path:

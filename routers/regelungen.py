@@ -18,7 +18,7 @@ from services.parser import parse_frontmatter, cache_invalidieren
 
 router = APIRouter(prefix="/api/regelungen", tags=["Regelungen"])
 
-_ID_RE = re.compile(r"^[a-z0-9][a-z0-9\-]{0,63}$")
+_ID_RE = re.compile(r"^[a-z0-9][a-z0-9\-]{0,126}$")
 
 REGELUNGEN_DIR: Path = config.DATA_DIR / "regelungen"
 

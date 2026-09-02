@@ -29,7 +29,7 @@ from services.parser import cache_invalidieren
 
 router = APIRouter(prefix="/api/vvt", tags=["VVT"])
 
-_ID_RE = re.compile(r"^[a-z0-9][a-z0-9\-]{0,63}$")
+_ID_RE = re.compile(r"^[a-z0-9][a-z0-9\-]{0,126}$")
 _SECTION_VALUES = {"frontmatter", "body", "all"}
 
 
