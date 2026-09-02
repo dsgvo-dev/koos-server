@@ -504,33 +504,8 @@ def prozess_to_md_merge(incoming: dict, existing_path: "Path | None" = None) -> 
 
     _INTERN = {"_dateiname", "body", "schritte"}
 
-    # Die Maske führt das Feld "datenarten", die Datei führt "daten". Ohne
-    # Umsetzung entstünde ein Feld, das kein Parser liest, während "daten"
-    # verschwindet. Sobald die Maske auf "daten" umgestellt ist, greift dieser
-    # Zweig nicht mehr.
-    if "datenarten" in incoming and "daten" not in incoming:
-        vorhanden = orig_meta.get("daten")
-        if vorhanden is None:
-            vorhanden = {}
-            orig_meta["daten"] = vorhanden
-
-        alt     = vorhanden.get("datenspeicher") or []
-        alt_ids = [x.get("id") if isinstance(x, dict) else x for x in alt]
-        neu_ids = [x.get("id") if isinstance(x, dict) else x
-                   for x in (incoming.get("datenarten") or [])]
-
-        if set(neu_ids) != set(alt_ids):
-            # Nur bei echter Änderung anfassen. Vorhandene Einträge behalten ihre
-            # Stellung und ihren Knoten; neue kommen ans Ende.
-            neu_menge = set(neu_ids)
-            behalten  = [e for e, i in zip(alt, alt_ids) if i in neu_menge]
-            ergaenzt  = [{"id": i} for i in neu_ids if i not in set(alt_ids)]
-            vorhanden["datenspeicher"] = behalten + ergaenzt
-        # Ist die Menge gleich, bleibt der Knoten unberührt — Reihenfolge,
-        # Schreibweise und etwaige Zusatzfelder der Einträge bleiben erhalten.
-
     for key, val in incoming.items():
-        if key in _INTERN or key.startswith("_") or key == "datenarten":
+        if key in _INTERN or key.startswith("_"):
             continue
         if key == "daten" and isinstance(val, dict):
             vorhanden = orig_meta.get("daten")
