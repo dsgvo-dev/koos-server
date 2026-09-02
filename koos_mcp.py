@@ -454,6 +454,12 @@ class KoosLoader:
         }
 
 
+# Markenname — zentral definiert, damit Umbenennung (z. B. Nexus → KOMPASS)
+# in einer Zeile erledigt ist. Wird in Tool-Beschreibungen und in der
+# Fußzeile der Suchergebnisse verwendet.
+BRAND = os.environ.get("BRAND", "Nexus")
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # MCP-SERVER — korrigierte API (Decorator-Pattern)
 # ══════════════════════════════════════════════════════════════════════════════
@@ -495,7 +501,7 @@ def _build_tools() -> list[Tool]:
     return [
         Tool(
             name="koos_search_oe",
-            description="Suche Organisationseinheiten nach Name oder ID. "
+            description=f"Suche Organisationseinheiten in der {BRAND} KOOS-Datenbank. "
                         "Optional filter nach parent_id.",
             inputSchema={
                 "type": "object",
@@ -511,7 +517,7 @@ def _build_tools() -> list[Tool]:
         ),
         Tool(
             name="koos_get_oe_tree",
-            description="Organigramm abrufen. Ohne root_id: alle OEs.",
+            description=f"Organigramm der {BRAND} KOOS-Organisation abrufen. Ohne root_id: alle OEs.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -524,7 +530,7 @@ def _build_tools() -> list[Tool]:
         ),
         Tool(
             name="koos_search_prozess",
-            description="Suche konkrete Verwaltungsprozesse dieser Verwaltung nach "
+            description=f"Suche konkrete Verwaltungsprozesse in der {BRAND} KOOS-Datenbank nach "
                         "Name, OE oder Datenart (z. B. 'Wohngeld beantragen', "
                         "'Kfz-Zulassung'). Liefert die für DIESEN Prozess bereits "
                         "geprüfte, verbindliche Zuordnung (OE, Datenarten). "
@@ -553,7 +559,7 @@ def _build_tools() -> list[Tool]:
         ),
         Tool(
             name="koos_search_daten",
-            description="Suche Datenarten nach Name, Kategorie oder Schutzstufe. "
+            description=f"Suche Datenarten in der {BRAND} KOOS-Datenbank nach Name, Kategorie oder Schutzstufe. "
                         "Liefert die für diese Verwaltung bereits fachlich geprüfte, "
                         "verbindliche Schutzstufen-Klassifizierung (A-E) konkreter "
                         "Datenarten inkl. Rechtsgrundlage und Löschfrist — das ist "
@@ -578,7 +584,7 @@ def _build_tools() -> list[Tool]:
         ),
         Tool(
             name="koos_search_vvt",
-            description="Suche VVT-Einträge (Verzeichnis von Verarbeitungs"
+            description=f"Suche VVT-Einträge in der {BRAND} KOOS-Datenbank (Verzeichnis von Verarbeitungs"
                         "tätigkeiten, Art. 30 DSGVO) nach Titel/Zweck, OE oder "
                         "verknüpftem Prozess (Filter prozess_id). Liefert die "
                         "bereits dokumentierte, verbindliche Rechtsgrundlage, "
@@ -610,7 +616,7 @@ def _build_tools() -> list[Tool]:
         ),
         Tool(
             name="koos_search_regelung",
-            description="Suche interne Regelungen dieser Verwaltung — Dienst"
+            description=f"Suche interne Regelungen in der {BRAND} KOOS-Datenbank — Dienst"
                         "anweisungen, Satzungen, Geschäftsordnungen (z. B. "
                         "'E-Mail', 'Cloud-Nutzung'). Liefert die bereits erlassene, "
                         "verbindliche Regelung inkl. Kontext, Entscheidung und "
@@ -648,7 +654,7 @@ def _build_tools() -> list[Tool]:
         ),
         Tool(
             name="koos_get_regelung_volltext",
-            description="Vollständiger, ungekürzter Text einer Regelung "
+            description=f"Vollständiger, ungekürzter Text einer Regelung aus der {BRAND} KOOS-Datenbank "
                         "(Dienstanweisung, Satzung, Geschäftsordnung). "
                         "koos_search_regelung liefert bewusst nur einen kurzen "
                         "Auszug zur Übersicht — Details, die weiter hinten im "
@@ -672,7 +678,7 @@ def _build_tools() -> list[Tool]:
         ),
         Tool(
             name="koos_get_context",
-            description="Gesamtkontext einer Organisationseinheit: OE-Daten, "
+            description=f"Gesamtkontext einer Organisationseinheit in der {BRAND} KOOS-Datenbank: OE-Daten, "
                         "Prozesse, VVT-Einträge (inkl. Rechtsgrundlage, "
                         "Empfänger, Löschfrist, TOM) und Datenarten in einem "
                         "Aufruf. Praktisch, wenn zu einem Prozess bereits die "
@@ -708,7 +714,7 @@ async def _handle_call_tool(ctx, params: CallToolRequestParams) -> CallToolResul
         results = _loader.search_oe(query=query, parent_id=parent_id)
         return CallToolResult(content=[TextContent(
             type="text",
-            text=json.dumps(results, ensure_ascii=False, indent=2)
+            text=json.dumps(results, ensure_ascii=False, indent=2) + f"\n\n---\n*Quelle: {BRAND} KOOS-Datenbank*"
         )])
 
     elif name == "koos_get_oe_tree":
@@ -716,7 +722,7 @@ async def _handle_call_tool(ctx, params: CallToolRequestParams) -> CallToolResul
         results = _loader.get_oe_tree(root_id=root_id)
         return CallToolResult(content=[TextContent(
             type="text",
-            text=json.dumps(results, ensure_ascii=False, indent=2)
+            text=json.dumps(results, ensure_ascii=False, indent=2) + f"\n\n---\n*Quelle: {BRAND} KOOS-Datenbank*"
         )])
 
     elif name == "koos_search_prozess":
@@ -729,7 +735,7 @@ async def _handle_call_tool(ctx, params: CallToolRequestParams) -> CallToolResul
         results = _hybrid_erweitern(_loader, "proc", results, query)
         return CallToolResult(content=[TextContent(
             type="text",
-            text=json.dumps(results, ensure_ascii=False, indent=2)
+            text=json.dumps(results, ensure_ascii=False, indent=2) + f"\n\n---\n*Quelle: {BRAND} KOOS-Datenbank*"
         )])
 
     elif name == "koos_search_daten":
@@ -739,7 +745,7 @@ async def _handle_call_tool(ctx, params: CallToolRequestParams) -> CallToolResul
         results = _hybrid_erweitern(_loader, "dstore", results, query)
         return CallToolResult(content=[TextContent(
             type="text",
-            text=json.dumps(results, ensure_ascii=False, indent=2)
+            text=json.dumps(results, ensure_ascii=False, indent=2) + f"\n\n---\n*Quelle: {BRAND} KOOS-Datenbank*"
         )])
 
     elif name == "koos_search_vvt":
@@ -750,7 +756,7 @@ async def _handle_call_tool(ctx, params: CallToolRequestParams) -> CallToolResul
         results = _hybrid_erweitern(_loader, "vvt", results, query)
         return CallToolResult(content=[TextContent(
             type="text",
-            text=json.dumps(results, ensure_ascii=False, indent=2)
+            text=json.dumps(results, ensure_ascii=False, indent=2) + f"\n\n---\n*Quelle: {BRAND} KOOS-Datenbank*"
         )])
 
     elif name == "koos_search_regelung":
@@ -763,7 +769,7 @@ async def _handle_call_tool(ctx, params: CallToolRequestParams) -> CallToolResul
         results = _hybrid_erweitern(_loader, "reg", results, query)
         return CallToolResult(content=[TextContent(
             type="text",
-            text=json.dumps(results, ensure_ascii=False, indent=2)
+            text=json.dumps(results, ensure_ascii=False, indent=2) + f"\n\n---\n*Quelle: {BRAND} KOOS-Datenbank*"
         )])
 
     elif name == "koos_get_regelung_volltext":
@@ -780,7 +786,7 @@ async def _handle_call_tool(ctx, params: CallToolRequestParams) -> CallToolResul
             )])
         return CallToolResult(content=[TextContent(
             type="text",
-            text=json.dumps(result, ensure_ascii=False, indent=2)
+            text=json.dumps(result, ensure_ascii=False, indent=2) + f"\n\n---\n*Quelle: {BRAND} KOOS-Datenbank*"
         )])
 
     elif name == "koos_get_context":
@@ -792,7 +798,7 @@ async def _handle_call_tool(ctx, params: CallToolRequestParams) -> CallToolResul
         context = _loader.get_context(oe_id=oe_id)
         return CallToolResult(content=[TextContent(
             type="text",
-            text=json.dumps(context, ensure_ascii=False, indent=2)
+            text=json.dumps(context, ensure_ascii=False, indent=2) + f"\n\n---\n*Quelle: {BRAND} KOOS-Datenbank*"
         )])
 
     else:
