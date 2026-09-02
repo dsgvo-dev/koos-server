@@ -509,19 +509,76 @@ def prozess_to_md_merge(incoming: dict, existing_path: "Path | None" = None) -> 
     # verschwindet. Sobald die Maske auf "daten" umgestellt ist, greift dieser
     # Zweig nicht mehr.
     if "datenarten" in incoming and "daten" not in incoming:
-        vorhanden = orig_meta.get("daten") or {}
-        orig_meta["daten"] = {
-            "input":  vorhanden.get("input", []),
-            "output": vorhanden.get("output", []),
-            "datenspeicher": [
-                x if isinstance(x, dict) else {"id": x}
-                for x in (incoming.get("datenarten") or [])
-            ],
-        }
+        vorhanden = orig_meta.get("daten")
+        if vorhanden is None:
+            vorhanden = {}
+            orig_meta["daten"] = vorhanden
+
+        alt     = vorhanden.get("datenspeicher") or []
+        alt_ids = [x.get("id") if isinstance(x, dict) else x for x in alt]
+        neu_ids = [x.get("id") if isinstance(x, dict) else x
+                   for x in (incoming.get("datenarten") or [])]
+
+        if set(neu_ids) != set(alt_ids):
+            # Nur bei echter Änderung anfassen. Vorhandene Einträge behalten ihre
+            # Stellung und ihren Knoten; neue kommen ans Ende.
+            neu_menge = set(neu_ids)
+            behalten  = [e for e, i in zip(alt, alt_ids) if i in neu_menge]
+            ergaenzt  = [{"id": i} for i in neu_ids if i not in set(alt_ids)]
+            vorhanden["datenspeicher"] = behalten + ergaenzt
+        # Ist die Menge gleich, bleibt der Knoten unberührt — Reihenfolge,
+        # Schreibweise und etwaige Zusatzfelder der Einträge bleiben erhalten.
 
     for key, val in incoming.items():
         if key in _INTERN or key.startswith("_") or key == "datenarten":
             continue
+        if key == "daten" and isinstance(val, dict):
+            vorhanden = orig_meta.get("daten")
+
+            if not isinstance(vorhanden, dict):
+                # Die Datei hat keinen daten-Block. Neu anlegen, aber nur mit
+                # dem, was auch Inhalt hat — leere Listen legen kein Feld an.
+                neu = {}
+                if val.get("input"):  neu["input"]  = list(val["input"])
+                if val.get("output"): neu["output"] = list(val["output"])
+                if val.get("datenspeicher"):
+                    neu["datenspeicher"] = [
+                        x if isinstance(x, dict) else {"id": x}
+                        for x in val["datenspeicher"]
+                    ]
+                if neu:
+                    orig_meta["daten"] = neu
+                continue
+
+            alt_ds  = vorhanden.get("datenspeicher") or []
+            alt_ids = [x.get("id") if isinstance(x, dict) else x for x in alt_ds]
+            neu_ids = [x.get("id") if isinstance(x, dict) else x
+                       for x in (val.get("datenspeicher") or [])]
+
+            # datenspeicher: bei gleicher Menge die Reihenfolge der Datei
+            # behalten. Nur bei echter Änderung neu aufbauen — vorhandene
+            # Einträge behalten Stellung und Knoten, neue kommen ans Ende.
+            if set(neu_ids) != set(alt_ids):
+                neu_menge = set(neu_ids)
+                alt_menge = set(alt_ids)
+                behalten  = [e for e, i in zip(alt_ds, alt_ids) if i in neu_menge]
+                ergaenzt  = [{"id": i} for i in neu_ids if i not in alt_menge]
+                vorhanden["datenspeicher"] = behalten + ergaenzt
+
+            # input/output: nur schreiben, wenn sie sich wirklich ändern. Eine
+            # leere Liste legt kein Feld an, das die Datei nicht führt — löscht
+            # aber sehr wohl eines, das sie führt.
+            for feld in ("input", "output"):
+                neu_wert = list(val.get(feld) or [])
+                alt_wert = list(vorhanden.get(feld) or [])
+                if neu_wert == alt_wert:
+                    continue
+                if not neu_wert and feld not in vorhanden:
+                    continue
+                vorhanden[feld] = neu_wert
+
+            continue   # Knoten der Datei aktualisiert, nicht ersetzt
+
         if key == "beteiligte":
             # Schutz: eine leere Liste löscht keine vorhandenen Einträge. Solange
             # die Maske eine der beiden Formen nicht anzeigen kann, wäre das kein

@@ -135,9 +135,13 @@ async def put_vvt(vvt_id: str, request: Request, force: bool = Query(False, desc
     Akzeptiert JSON (strukturiertes Dict) oder Markdown-Rohtext.
     Lehnt verwaiste prozesse:/datenspeicher:-Referenzen mit 422 ab,
     sofern nicht ?force=true gesetzt ist (vgl. ADR 001, ID-Validierungsfunktion).
+    Erstellt nur dann einen Git-Commit, wenn sich der Inhalt tatsächlich
+    geändert hat.
     """
     datei = _datei(vvt_id)
     config.VVT_DIR.mkdir(parents=True, exist_ok=True)
+
+    existiert_vorher = datei.exists()
 
     content_type = request.headers.get("content-type", "")
     if "application/json" in content_type:
@@ -154,15 +158,26 @@ async def put_vvt(vvt_id: str, request: Request, force: bool = Query(False, desc
         # in der Datei erhalten -- `kontextprofil`, die Belege an den
         # datenspeicher-Eintraegen und den Markdown-Body. Ohne den Merge
         # schriebe vvt_to_md() die Datei aus der Feldliste des Parsers neu.
-        md_text = parser.vvt_to_md_merge(data, datei if datei.exists() else None)
+        md_text = parser.vvt_to_md_merge(data, datei if existiert_vorher else None)
+
+        # Vergleich: vorhandene Datei durch dieselbe Pipeline
+        if existiert_vorher:
+            rohtext = datei.read_text(encoding="utf-8")
+            parsed = parser.parse_vvt_md(vvt_id, rohtext)
+            roundtrip = parser.vvt_to_md_merge(parsed, datei)
+            if md_text == roundtrip:
+                return {"ok": True, "id": vvt_id, "gespeichert": False}
     else:
         md_text = (await request.body()).decode("utf-8")
+        # Rohtext: direkter Vergleich
+        if existiert_vorher and md_text == datei.read_text(encoding="utf-8"):
+            return {"ok": True, "id": vvt_id, "gespeichert": False}
 
     datei.write_text(md_text, encoding="utf-8")
-    aktion = "aktualisiert" if datei.exists() else "angelegt"
+    aktion = "aktualisiert" if existiert_vorher else "angelegt"
     git_service.commit([datei], f"VVT {vvt_id} {aktion}")
     cache_invalidieren()
-    return {"ok": True, "id": vvt_id}
+    return {"ok": True, "id": vvt_id, "gespeichert": True}
 
 
 @router.delete("/{vvt_id}", summary="VVT-Eintrag löschen")

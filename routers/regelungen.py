@@ -83,24 +83,42 @@ def get_raw(reg_id: str) -> Response:
 
 @router.put("/{reg_id}", summary="Regelung speichern")
 async def put_regelung(reg_id: str, request: Request) -> dict:
+    """
+    Akzeptiert JSON (strukturiertes Dict) oder Markdown-Rohtext.
+    Erstellt nur dann einen Git-Commit, wenn sich der Inhalt tatsächlich
+    geändert hat.
+    """
     datei = _datei(reg_id)
     REGELUNGEN_DIR.mkdir(parents=True, exist_ok=True)
+
+    existiert_vorher = datei.exists()
+
     content_type = request.headers.get("content-type", "")
     begruendung = None
     if "application/json" in content_type:
-        import yaml
         data: dict = await request.json()
         begruendung = data.pop("_begruendung", None)
-        # Merge statt Überschreiben: erhält ersetzt, version, stand,
-        # basierend_auf, verzahnt_mit und alles, was die Maske nicht führt.
-        # Setzt außerdem entscheidendesGremium -> entscheidendes-gremium zurück.
-        md_text = parser.regelung_to_md_merge(data, datei if datei.exists() else None)
+        md_text = parser.regelung_to_md_merge(
+            data, datei if existiert_vorher else None
+        )
+
+        # Vergleich: vorhandene Datei durch dieselbe Pipeline
+        if existiert_vorher:
+            rohtext = datei.read_text(encoding="utf-8")
+            parsed = parser.parse_regelung_md(reg_id, rohtext)
+            roundtrip = parser.regelung_to_md_merge(parsed, datei)
+            if md_text == roundtrip:
+                return {"ok": True, "id": reg_id, "gespeichert": False}
     else:
         md_text = (await request.body()).decode("utf-8")
+        # Rohtext: direkter Vergleich
+        if existiert_vorher and md_text == datei.read_text(encoding="utf-8"):
+            return {"ok": True, "id": reg_id, "gespeichert": False}
+
     datei.write_text(md_text, encoding="utf-8")
     git_service.commit([datei], f"Regelung {reg_id} gespeichert", begruendung=begruendung)
     cache_invalidieren()
-    return {"ok": True, "id": reg_id}
+    return {"ok": True, "id": reg_id, "gespeichert": True}
 
 
 @router.delete("/{reg_id}", summary="Regelung löschen")

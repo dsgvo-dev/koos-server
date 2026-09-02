@@ -811,7 +811,7 @@ async def _handle_call_tool(ctx, params: CallToolRequestParams) -> CallToolResul
 # MAIN
 # ══════════════════════════════════════════════════════════════════════════════
 
-def main():
+async def main():
     global _loader
 
     parser = argparse.ArgumentParser(description="KOOS-MCP-Server")
@@ -900,16 +900,13 @@ def main():
         print(f"KOOS-MCP SSE auf Port {args.port}", file=sys.stderr)
         uvicorn.run(app, host="0.0.0.0", port=args.port)
     else:
-        async def run_stdio():
-            from mcp.server.stdio import stdio_server
-            async with stdio_server() as (read_stream, write_stream):
-                await server.run(
-                    read_stream, write_stream,
-                    server.create_initialization_options(),
-                )
-        import asyncio
-        asyncio.run(run_stdio())
+        async with stdio_server() as (read_stream, write_stream):
+            await server.run(
+                read_stream, write_stream,
+                server.create_initialization_options(),
+            )
 
 
 if __name__ == "__main__":
-    main()
+    import asyncio
+    asyncio.run(main())

@@ -35,6 +35,8 @@ async def put_orga(request: Request) -> dict:
     """
     Erwartet einen JSON-Array von OE-Einheiten (gleiche Struktur wie GET).
     Schreibt als YAML zurück und erstellt einen Git-Commit.
+    Erstellt nur dann einen Git-Commit, wenn sich der Inhalt tatsächlich
+    geändert hat.
     """
     body: list | dict = await request.json()
     # Begründung aus Wrapper-Objekt extrahieren falls vorhanden
@@ -44,14 +46,26 @@ async def put_orga(request: Request) -> dict:
     else:
         begruendung = None
         einheiten = body
+
+    existiert_vorher = config.ORGA_FILE.exists()
+
     # Merge statt Überschreiben: erhält Kommentarkopf und den Schlüssel `name`.
     yaml_text = parser.orga_to_yaml_merge(
-        einheiten, config.ORGA_FILE if config.ORGA_FILE.exists() else None
+        einheiten, config.ORGA_FILE if existiert_vorher else None
     )
+
+    # Vergleich: vorhandene Datei durch dieselbe Pipeline
+    if existiert_vorher:
+        rohtext = config.ORGA_FILE.read_text(encoding="utf-8")
+        parsed = parser.parse_orga_yaml(rohtext)
+        roundtrip = parser.orga_to_yaml_merge(parsed, config.ORGA_FILE)
+        if yaml_text == roundtrip:
+            return {"ok": True, "einheiten": len(einheiten), "gespeichert": False}
+
     config.ORGA_FILE.write_text(yaml_text, encoding="utf-8")
     git_service.commit([config.ORGA_FILE], "orga.yaml aktualisiert",
                        begruendung=begruendung)
-    return {"ok": True, "einheiten": len(einheiten)}
+    return {"ok": True, "einheiten": len(einheiten), "gespeichert": True}
 
 
 @router.put("/raw", summary="orga.yaml als Rohtext speichern")
@@ -59,6 +73,8 @@ async def put_orga_raw(request: Request) -> dict:
     """
     Erwartet den Rohtext der orga.yaml als Anfrage-Body (text/yaml oder text/plain).
     Validiert durch Parsen, schreibt dann die Originaldatei.
+    Erstellt nur dann einen Git-Commit, wenn sich der Inhalt tatsächlich
+    geändert hat.
     """
     text = (await request.body()).decode("utf-8")
     # Validierung
@@ -66,6 +82,11 @@ async def put_orga_raw(request: Request) -> dict:
         einheiten = parser.parse_orga_yaml(text)
     except Exception as e:
         raise HTTPException(422, detail=f"Ungültige YAML: {e}")
+
+    # Rohtext: direkter Vergleich
+    if config.ORGA_FILE.exists() and text == config.ORGA_FILE.read_text(encoding="utf-8"):
+        return {"ok": True, "einheiten": len(einheiten), "gespeichert": False}
+
     config.ORGA_FILE.write_text(text, encoding="utf-8")
     git_service.commit([config.ORGA_FILE], "orga.yaml aktualisiert (raw)")
-    return {"ok": True, "einheiten": len(einheiten)}
+    return {"ok": True, "einheiten": len(einheiten), "gespeichert": True}

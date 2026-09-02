@@ -98,28 +98,42 @@ async def put_prozess(prozess_id: str, request: Request) -> dict:
     Akzeptiert entweder:
     - JSON-Body (Content-Type: application/json): strukturiertes Prozess-Dict
     - Plaintext/Markdown-Body: Rohtext der .md-Datei
-    Erstellt immer einen Git-Commit.
+    Erstellt nur dann einen Git-Commit, wenn sich der Inhalt tatsächlich
+    geändert hat.
     """
     datei = _datei(prozess_id)
     config.PROZESSE_DIR.mkdir(parents=True, exist_ok=True)
+
+    existiert_vorher = datei.exists()
 
     begruendung = None
     content_type = request.headers.get("content-type", "")
     if "application/json" in content_type:
         data: dict = await request.json()
         begruendung = data.pop("_begruendung", None)
-        # Merge statt Überschreiben: erhält body, letzte-aktualisierung,
-        # ersetzt-durch, leika_id, ozg_id und alles, was die Maske nicht führt.
-        md_text = parser.prozess_to_md_merge(data, datei if datei.exists() else None)
+        md_text = parser.prozess_to_md_merge(
+            data, datei if existiert_vorher else None
+        )
+
+        # Vergleich: vorhandene Datei durch dieselbe Pipeline
+        if existiert_vorher:
+            rohtext = datei.read_text(encoding="utf-8")
+            parsed = parser.parse_prozess_md(prozess_id, rohtext)
+            roundtrip = parser.prozess_to_md_merge(parsed, datei)
+            if md_text == roundtrip:
+                return {"ok": True, "id": prozess_id, "gespeichert": False}
     else:
         md_text = (await request.body()).decode("utf-8")
+        # Rohtext: direkter Vergleich
+        if existiert_vorher and md_text == datei.read_text(encoding="utf-8"):
+            return {"ok": True, "id": prozess_id, "gespeichert": False}
 
     datei.write_text(md_text, encoding="utf-8")
-    aktion = "aktualisiert" if datei.exists() else "angelegt"
+    aktion = "aktualisiert" if existiert_vorher else "angelegt"
     git_service.commit([datei], f"Prozess {prozess_id} {aktion}",
                        begruendung=begruendung)
     cache_invalidieren()
-    return {"ok": True, "id": prozess_id}
+    return {"ok": True, "id": prozess_id, "gespeichert": True}
 
 
 @router.delete("/{prozess_id}", summary="Prozess löschen")

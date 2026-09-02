@@ -50,24 +50,43 @@ def get_raw(daten_id: str) -> Response:
 
 @router.put("/{daten_id}", summary="Datenart speichern")
 async def put_daten(daten_id: str, request: Request) -> dict:
+    """
+    Akzeptiert JSON (strukturiertes Dict) oder Markdown-Rohtext.
+    Erstellt nur dann einen Git-Commit, wenn sich der Inhalt tatsächlich
+    geändert hat.
+    """
     datei = _datei(daten_id)
     config.DATEN_DIR.mkdir(parents=True, exist_ok=True)
+
+    existiert_vorher = datei.exists()
 
     begruendung = None
     content_type = request.headers.get("content-type", "")
     if "application/json" in content_type:
         data: dict = await request.json()
         begruendung = data.pop("_begruendung", None)
-        # Merge-Strategie: erhält body + bpmn/tags/etc. aus vorhandener Datei
-        md_text = parser.daten_to_md_merge(data, datei if datei.exists() else None)
+        md_text = parser.daten_to_md_merge(
+            data, datei if existiert_vorher else None
+        )
+
+        # Vergleich: vorhandene Datei durch dieselbe Pipeline
+        if existiert_vorher:
+            rohtext = datei.read_text(encoding="utf-8")
+            parsed = parser.parse_daten_md(daten_id, rohtext)
+            roundtrip = parser.daten_to_md_merge(parsed, datei)
+            if md_text == roundtrip:
+                return {"ok": True, "id": daten_id, "gespeichert": False}
     else:
         md_text = (await request.body()).decode("utf-8")
+        # Rohtext: direkter Vergleich
+        if existiert_vorher and md_text == datei.read_text(encoding="utf-8"):
+            return {"ok": True, "id": daten_id, "gespeichert": False}
 
     datei.write_text(md_text, encoding="utf-8")
     git_service.commit([datei], f"Datenart {daten_id} gespeichert",
                        begruendung=begruendung)
     cache_invalidieren()
-    return {"ok": True, "id": daten_id}
+    return {"ok": True, "id": daten_id, "gespeichert": True}
 
 
 @router.delete("/{daten_id}", summary="Datenart löschen")
