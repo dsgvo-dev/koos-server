@@ -3787,7 +3787,9 @@ function befuelleFormular(ds, schema) {
 
     switch (feld.typ) {
       case "select":
-      case "reg-select-null": {
+      case "reg-select-null":
+      case "oe-select":
+      case "oe-select-null": {
         const el = document.getElementById(fid);
         if (!el) break;
         el.value = val;
@@ -3806,8 +3808,7 @@ function befuelleFormular(ds, schema) {
         }
         break;
       }
-      case "text": case "textarea":
-      case "oe-select": case "oe-select-null": {
+      case "text": case "textarea": {
         const el = document.getElementById(fid);
         if (el) el.value = val;
         break;
