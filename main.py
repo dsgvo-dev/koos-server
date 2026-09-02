@@ -34,6 +34,25 @@ if not config.DATA_DIR.is_dir():
     )
     sys.exit(1)
 
+# ── Plausibilität: liegen unter DATA_DIR überhaupt KOOS-Daten? ────────────────
+# Ohne diese Prüfung lief der Server auch dann an, wenn DATA_DIR auf ein
+# beliebiges anderes Verzeichnis zeigte — mit leerem Bestand, und
+# git_init_wenn_noetig() legte dort ein Repository an (siehe koos-knowledge,
+# 01.09.). Ein leeres Verzeichnis bleibt erlaubt: das ist eine Neuinstallation.
+_MARKER = (config.ORGA_FILE, config.PROZESSE_DIR, config.DATEN_DIR)
+if not any(m.exists() for m in _MARKER):
+    _fremd = [p for p in config.DATA_DIR.iterdir() if not p.name.startswith(".")]
+    if _fremd:
+        log.error(
+            "DATA_DIR enthält keine KOOS-Daten: %s\n"
+            "Erwartet wird mindestens eines von: orga.yaml, prozesse/, daten/.\n"
+            "Gefunden wurden stattdessen %d andere Einträge — vermutlich zeigt "
+            "KOOS_DATA_DIR auf das falsche Verzeichnis.",
+            config.DATA_DIR, len(_fremd),
+        )
+        sys.exit(1)
+    log.info("DATA_DIR ist leer — Neuinstallation, Git wird angelegt.")
+
 log.info("DATA_DIR: %s", config.DATA_DIR)
 
 # ── Git initialisieren ────────────────────────────────────────────────────────
