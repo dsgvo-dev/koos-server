@@ -117,7 +117,10 @@ def _text_prozess(p: dict, vvt_map: dict[str, list[dict]]) -> str:
         " ".join(str(x) for x in (p.get("regelungen") or [])),
     ]
     for v in vvt_map.get(p.get("id"), []):
-        teile.append(v.get("rechtsgrundlage", "") or "")
+        rl = v.get("rechtsgrundlage", "") or ""
+        if isinstance(rl, list):
+            rl = "; ".join(rl)
+        teile.append(rl)
         teile.append(v.get("kategorien_daten", "") or "")
         teile.append(v.get("loeschfrist", "") or "")
     return " ".join(t for t in teile if t)
@@ -128,14 +131,19 @@ def _text_vvt(v: dict) -> str:
     # fehlten bislang — Anfragen wie "welcher VVT-Eintrag hat noch keine
     # TOM dokumentiert" oder "wer bekommt Wohngeld-Daten" (Empfänger)
     # konnten diese Einträge semantisch nicht finden.
+    def _s(key: str) -> str:
+        val = v.get(key, "") or ""
+        if isinstance(val, list):
+            return "; ".join(str(x) for x in val)
+        return str(val)
     teile = [
-        v.get("titel", ""),
-        v.get("zweck", "") or "",
-        v.get("rechtsgrundlage", "") or "",
-        v.get("kategorien_daten", "") or "",
-        v.get("kategorien_betroffener", "") or "",
-        v.get("empfaenger", "") or "",
-        v.get("software_verarbeitungsmittel", "") or "",
+        _s("titel"),
+        _s("zweck"),
+        _s("rechtsgrundlage"),
+        _s("kategorien_daten"),
+        _s("kategorien_betroffener"),
+        _s("empfaenger"),
+        _s("software_verarbeitungsmittel"),
         " ".join(str(x) for x in (v.get("tom") or [])),
     ]
     return " ".join(t for t in teile if t)
