@@ -1,6 +1,6 @@
 """
 KOOS Server – Haupt-Applikation
-Starte mit:  uvicorn main:app --host 0.0.0.0 --port 8090 --reload
+Starte mit:  uvicorn main:app --host 127.0.0.1 --port 8090 --reload
 Oder:        ./start.sh
 """
 from __future__ import annotations
@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 import config
-from routers import orga, prozesse, daten, regelungen, stats, llm, chat, koos_config, vvt, tom
+from routers import orga, prozesse, daten, regelungen, stats, llm, chat, koos_config, vvt, tom, kette, admin
 from services import git_service
 
 # ── Logging ───────────────────────────────────────────────────────────────────
@@ -101,6 +101,8 @@ app.include_router(chat.router)
 app.include_router(koos_config.router)
 app.include_router(vvt.router)
 app.include_router(tom.router)
+app.include_router(kette.router)
+app.include_router(admin.router)
 
 
 # ── Audit-Log-Endpunkt ────────────────────────────────────────────────────────
@@ -160,6 +162,20 @@ def health() -> dict:
 if config.STATIC_DIR.is_dir():
     app.mount("/static", StaticFiles(directory=str(config.STATIC_DIR)), name="static")
 
+# Nexus-Oberflaeche (Kundensicht): ausdrueckliche Route fuer genau diese eine
+# Datei. Das Server-Verzeichnis als Ganzes auszuliefern wuerde den Quelltext
+# offenlegen. Muss vor der Auffangroute stehen, sonst faengt diese sie ab.
+NEXUS_GUI: Path = Path(__file__).parent / "nexus-webui-prototyp.html"
+
+
+@app.get("/nexus", include_in_schema=False)
+def nexus() -> FileResponse:
+    """Nexus-Oberflaeche — genau diese eine Datei."""
+    if not NEXUS_GUI.is_file():
+        raise HTTPException(404, detail="Nexus-Oberfläche nicht gefunden")
+    return FileResponse(str(NEXUS_GUI))
+
+
 if config.GUI_PATH.is_file():
     @app.get("/", include_in_schema=False)
     def root() -> FileResponse:
@@ -168,8 +184,10 @@ if config.GUI_PATH.is_file():
     @app.get("/{pfad:path}", include_in_schema=False)
     def catch_all(pfad: str) -> FileResponse:
         """Alle anderen Pfade → index.html (für Client-side Routing)."""
-        datei = config.STATIC_DIR / pfad
-        if datei.is_file():
+        datei = (config.STATIC_DIR / pfad).resolve()
+        # Riegel: nur Dateien unterhalb des Datenverzeichnisses ausliefern.
+        # Ohne ihn gibt ein Pfad mit '..' Dateien außerhalb davon heraus.
+        if datei.is_file() and datei.is_relative_to(config.STATIC_DIR.resolve()):
             return FileResponse(str(datei))
         return FileResponse(str(config.GUI_PATH))
 else:

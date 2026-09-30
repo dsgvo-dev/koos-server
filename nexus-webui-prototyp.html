@@ -569,6 +569,9 @@ body.assist-zu #assist{display:none}
   #assist{--b-assist:290px}
   #search{width:150px}
 }
+.admin-btn:disabled { opacity:.5; cursor:wait; }
+.admin-spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
 </style>
 </head>
 <body>
@@ -601,6 +604,8 @@ body.assist-zu #assist{display:none}
       <span id="datenstand" class="laedt" title="Datenquelle">⏳ Lädt …</span>
       <button class="icon-btn" id="btn-ordner" title="KOOS-Datenordner öffnen und direkt lesen" aria-label="Ordner öffnen">📂</button>
       <button class="icon-btn" id="btn-reload" title="Daten neu laden" aria-label="Daten neu laden">⟳</button>
+      <button class="icon-btn admin-btn" id="btn-cache-refresh" title="Parser-Cache leeren (nach manuellen Dateiänderungen)" aria-label="Cache leeren">🧹</button>
+      <button class="icon-btn admin-btn" id="btn-reindex" title="Semantischen Suchindex neu aufbauen (nach Batch-Import)" aria-label="Index neu bauen">🏗️</button>
     </div>
     <div id="search-wrap">
       <input id="search" type="search" placeholder="Alles durchsuchen …" autocomplete="off"
@@ -738,6 +743,39 @@ const FALLBACK = {
           → liegen in der SQLite-Datenbank der DSMS-Anwendung. Dafür gibt es
             keine Schnittstelle, also gibt es hier auch keinen Wert. „unbekannt"
             heißt unbekannt und wird nicht durch eine plausible Zahl ersetzt.  */
+/* Die Übersicht aus /api/kette trägt je Verarbeitungstätigkeit nur die
+   Felder, die Listen, Stände und Kennzahlen brauchen — in derselben
+   Verschachtelung wie die Quelldateien. Jeder Teilsatz wird als solcher
+   gekennzeichnet; die Detailmodule holen den vollen Satz bei Bedarf nach. */
+const KETTE_ZWEIGE=['bes','risiko','schwellwert','tom','bedrohungen','ergaenzend','dsfa'];
+
+function ketteAusUebersicht(u){
+  K={bes:{}, risiko:{}, schwellwert:{}, tom:{}, bedrohungen:{}, ergaenzend:{}, dsfa:{}, baseline:null};
+  for(const [vid,e] of Object.entries(u||{}))
+    for(const z of KETTE_ZWEIGE)
+      if(e&&e[z]) K[z][vid]=Object.assign({_uebersicht:true}, e[z]);
+}
+
+let _ketteHolt=null;
+async function ketteVervollstaendigen(){
+  if(typeof aktiveVT!=='function') return;
+  const v=aktiveVT(); if(!v||_ketteHolt===v.id) return;
+  const teil=KETTE_ZWEIGE.some(z=>K[z][v.id]&&K[z][v.id]._uebersicht);
+  if(!teil) return;
+  _ketteHolt=v.id;
+  try{
+    const r=await fetch(`/api/kette/${encodeURIComponent(v.id)}`,{cache:'no-store'});
+    if(r.ok){
+      const d=await r.json();
+      for(const z of KETTE_ZWEIGE) if(d[z]) K[z][v.id]=d[z];
+      if(d.baseline) K.baseline=d.baseline;
+      kettenstaendeErmitteln();
+      renderModul();
+    }
+  }catch(e){ console.warn('Kette nicht nachladbar:', e); }
+  finally{ _ketteHolt=null; }
+}
+
 function kettenstaendeErmitteln(){
   KETTE={}; TOM_STAND={};
   const stand=(o)=>{
@@ -799,7 +837,7 @@ async function datenLaden(){
 
   /* 1) REST-API des Nexus-Servers */
   try{
-    const [orga,proz,daten,reg,vvt,tom,thr]=await Promise.all([
+    const [orga,proz,daten,reg,vvt,tom,thr,kette]=await Promise.all([
       fetch('/api/orga',OPT).then(ok),
       fetch('/api/prozesse',OPT).then(ok),
       fetch('/api/daten',OPT).then(ok),
@@ -807,7 +845,12 @@ async function datenLaden(){
       fetch('/api/vvt',OPT).then(ok),
       fetch('/api/tom/definitionen',OPT).then(ok).catch(()=>[]),
       fetch('/api/tom/bedrohungen',OPT).then(ok).catch(()=>[]),
+      /* Die Datenschutzkette in einem Abruf statt in 1.615 Einzeldateien.
+         Fehlt der Endpunkt, bleibt die Kette leer und die Stammdaten stehen
+         trotzdem — die Oberfläche zeigt dann „keine Datei vorhanden“. */
+      fetch('/api/kette',OPT).then(ok).catch(()=>null),
     ]);
+    ketteAusUebersicht(kette);
     datenUebernehmen(ausApi({orga,proz,daten,reg,vvt,tom,thr}));
     datenstand('live'); alleAnsichtenNeu(); return;
   }catch(e){ /* kein Server – weiter */ }
@@ -989,41 +1032,55 @@ function ausApi(x){
         beteiligte:(p.beteiligte||[]).map(b=>b&&b.einheit||b).filter(Boolean),
         leika:p.leika_id??null, ozg:p.ozg_id??null, status:p.status||null,
         dstores:idListe((p.daten||{}).datenspeicher), regelungen:p.regelungen||[],
-        sch:(String(p.body||'').match(/^\*\*(\d+ [^*]+)\*\*/gm)||[]).map(t=>{
-          const s2=t.replace(/\*\*/g,'').trim();
+        /* Die API liefert die Schritte fertig (Feld `schritte`, je Schritt
+           name und beschreibung). Nur im Ordnerbetrieb muss der Fließtext
+           zerlegt werden. */
+        sch:(Array.isArray(p.schritte)&&p.schritte.length
+              ? p.schritte.map(x=>String((x&&x.name)||x||'').trim())
+              : (String(p.body||'').match(/^\*\*(\d+ [^*]+)\*\*/gm)||[])
+                  .map(t=>t.replace(/\*\*/g,'').trim())
+            ).filter(Boolean).map(s2=>{
           let k=_schrittIdx.indexOf(s2); if(k<0){ k=_schrittIdx.push(s2)-1; } return k; })})),
     SCHRITTE:_schrittIdx,
     /* Seit 2026-08-10 trennt die Klassifizierung zwei Sichten: Datenschutz
        (Schaden für die betroffene Person) und Informationssicherheit (Schaden
        für die Institution). Die alten Feldnamen werden weiter akzeptiert,
        damit ältere Bestände lesbar bleiben. */
-    DSTORES:(x.daten||[]).map(d=>{ const kl=d.klassifizierung||{}, au=kl.aufbewahrung||{};
+    DSTORES:(x.daten||[]).map(d=>{ const kl=d.klassifizierung||{},
+        au=kl.aufbewahrung||d.aufbewahrung||{},
+        /* Die Quelldateien führen die Klassifizierung im Block, die API gibt
+           sie flach heraus. Beides wird gelesen, damit Ordner- und
+           Serverbetrieb dieselbe Anzeige ergeben. */
+        f=(imBlock,flach)=>kl[imBlock] ?? d[flach ?? imBlock],
+        /* Artikel-9-Merkmal ist kein Feld im Bestand (ADR 013 hat
+           datenkategorie am 2026-08-15 abgeschafft). Gesucht wird in Name
+           und Schlagworten, und es wird als Schlagworttreffer benannt. */
+        such=`${d.name} ${(d.tags||[]).join(' ')}`,
+        art9re=/gesundheit|biometr|religio|sozialdat|fingerabdruck|strafe?|sexual|gewerkschaft|ethni|genetisch|weltanschau/i;
       return {id:d.id,name:d.name,
-        schutz:kl.schutzstufe, bedarf:kl.schutzbedarf,
-        vertraul:kl.vertraulichkeitsklasse ?? kl.vertraulichkeit,
-        bsiV:kl['bsi-vertraulichkeit'], bsiI:kl['bsi-integritaet'] ?? kl.integritaet,
-        bsiA:kl['bsi-verfuegbarkeit'] ?? kl.verfuegbarkeit,
-        bsiBedarf:kl['bsi-schutzbedarf'],
-        kategorie:d.datenkategorie,oe:d['zuständige-einheit']||d.zustaendigeEinheit,
+        schutz:f('schutzstufe'), bedarf:f('schutzbedarf'),
+        vertraul:kl.vertraulichkeitsklasse ?? kl.vertraulichkeit ?? d.vertraulichkeit,
+        bsiV:f('bsi-vertraulichkeit'), bsiI:f('bsi-integritaet') ?? kl.integritaet,
+        bsiA:f('bsi-verfuegbarkeit') ?? kl.verfuegbarkeit,
+        bsiBedarf:f('bsi-schutzbedarf'),
+        oe:d['zuständige-einheit']||d.zustaendigeEinheit,
         frist:[au.frist,au.beginn&&('ab '+au.beginn)].filter(Boolean).join(', ')||'—',
-        rg:(kl.rechtsgrundlagen||[]).map(r=>r&&r.gesetz).filter(Boolean).slice(0,3),
-        /* Kein Feld im Bestand — nur ein Schlagworttreffer. Er wird als solcher
-           benannt und nie als geprüftes „nein" ausgegeben. */
-        art9wort:(`${d.name} ${d.datenkategorie} ${(d.tags||[]).join(' ')}`
-          .match(/gesundheit|biometr|religio|sozialdat|fingerabdruck|strafe?|sexual|gewerkschaft|ethni|genetisch|weltanschau/i)||[null])[0],
-        art9:!!(`${d.name} ${d.datenkategorie} ${(d.tags||[]).join(' ')}`
-          .match(/gesundheit|biometr|religio|sozialdat|fingerabdruck|strafe?|sexual|gewerkschaft|ethni|genetisch|weltanschau/i)),
+        rg:((kl.rechtsgrundlagen ?? d.rechtsgrundlagen)||[]).map(r=>r&&r.gesetz).filter(Boolean).slice(0,3),
+        art9wort:(such.match(art9re)||[null])[0],
+        art9:art9re.test(such),
         tags:(d.tags||[]).slice(0,5)};}),
     REGELUNGEN:(x.reg||[]).map(r=>({id:r.id,name:r.name,typ:r.typ,oe:r.zustaendigeEinheit,
         stand:String(r.datum||''),status:r.status,gremium:r.entscheidendesGremium,
-        kontext:r.kontext||'',entscheidung:r.entscheidung||'',body:r.body||''})),
+        /* kontext und entscheidung sind mit Commit 90954fa aus dem Parser
+           entfernt worden — sie kommen nicht mehr und werden nicht gelesen. */
+        body:r.body||''})),
     VVT:(x.vvt||[]).map(v=>({id:v.id,uid:String(v.uid||''),titel:v.titel,oe:v.organisationseinheit,
         status:v.status,zweck:v.zweck,rechtsgrundlage:v.rechtsgrundlage,
         betroffene:v.kategorien_betroffener,datenarten:v.kategorien_daten,empfaenger:v.empfaenger,
         drittland:v.transfer_drittland,frist:v.loeschfrist,software:v.software_verarbeitungsmittel,
         prozesse:v.prozesse||[],dstores:idListe(v.datenspeicher),
         tom:(v.tom||[]).map(x=>typeof x==='string'?x:(x&&x.id)).filter(Boolean),
-        leika:v.leika_id??null,ozg:v.ozg_id??null,stand:String(v['letzte-aktualisierung']||'')})),
+        leika:v.leika_id??null,ozg:v.ozg_id??null,stand:String(v.letzte_aktualisierung||v['letzte-aktualisierung']||'')})),
     TOMS:(x.tom||[]).map(t=>({id:t.id,kat:t.kategorie,name:t.name,typ:t['maßnahmentyp'],
         wirkung:t.wirkungspunktzahl,niveau:t.risikoniveau,beschreibung:t.beschreibung,
         ziele:((t.anwendbarkeit||{}).schutzziele)||[]})),
@@ -1337,6 +1394,10 @@ function renderModul(){
   })[S.modul] || (()=>'<div class="leer-hinweis">Modul nicht gefunden</div>');
   el.innerHTML=`<div class="modul active">${f()}</div>`;
 
+  /* Zeigt das Modul eine Verarbeitungstätigkeit im Einzelnen, wird ihr
+     vollständiger Kettensatz nachgeholt und einmal neu gezeichnet. */
+  if(typeof ketteVervollstaendigen==='function') ketteVervollstaendigen();
+
   /* Die Listenspalte kostet bei schmalen Fenstern den halben Platz. Der
      Knopf wird nachträglich angehängt, damit er nicht in jeden der neun
      Modul-Renderer einzeln geschrieben werden muss. */
@@ -1617,7 +1678,7 @@ function mDatenspeicher(){
   const vts=d?VVT.filter(v=>(v.dstores||[]).includes(d.id)):[];
   const procs=d?PROZESSE.filter(p=>(p.dstores||[]).includes(d.id)):[];
   const stufeCls={A:'',B:'',C:'warn',D:'err',E:'err'};
-  const g=filtern('datenspeicher',DSTORES,x=>x.name+' '+(x.kategorie||'')+' '+(x.tags||[]).join(' '));
+  const g=filtern('datenspeicher',DSTORES,x=>x.name+' '+(x.tags||[]).join(' '));
   return `
   <div class="liste">
     <div class="liste-kopf"><div><p>Datenspeicher</p><span>${g.treffer.length} von ${DSTORES.length}</span></div><button class="btn-neu">+ Neu</button></div>
@@ -1658,7 +1719,6 @@ function mDatenspeicher(){
 
     <div class="sektion"><div class="sektion-label">Zuordnung</div>
       <div class="form-grid drei">
-        <div class="feld"><div class="feld-label">Datenkategorie</div><div class="feld-wert">${esc(d.kategorie||'—')}</div></div>
         <div class="feld"><div class="feld-label">Zuständige Einheit</div><div class="feld-wert"><span class="pill link" data-go="organisation:${d.oe}">${esc(oeName(d.oe))}</span></div></div>
         <div class="feld"><div class="feld-label">Hinweis auf Art. 9 DSGVO</div><div class="feld-wert">${
           d.art9wort?`<span class="pill err">Schlagwort „${esc(d.art9wort)}"</span>`
@@ -2713,7 +2773,7 @@ function idf(w){
     const korpus=[
       ...VVT.map(v=>[v.titel,v.zweck,v.datenarten,v.betroffene,v.software,v.empfaenger].join(' ')),
       ...PROZESSE.map(p=>p.name||''),
-      ...DSTORES.map(d=>[d.name,d.kategorie,(d.tags||[]).join(' ')].join(' ')),
+      ...DSTORES.map(d=>[d.name,(d.tags||[]).join(' ')].join(' ')),
     ].map(norm);
     _idf={korpus, N:Math.max(korpus.length,1), cache:{}};
   }
@@ -2787,7 +2847,7 @@ function bezugFinden(frage){
 
   const vt   = ruf('lokal','koos_search_vvt',     {query:q}, treffer(frage, VVT,      [['titel',6],['zweck',2],['datenarten',1],['betroffene',1],['software',1]], 1.0));
   const proc = ruf('lokal','koos_search_prozess', {query:q}, treffer(frage, PROZESSE, [['name',6]], 0.95));
-  const ds   = ruf('lokal','koos_search_daten',   {query:q}, treffer(frage, DSTORES,  [['name',5],['kategorie',1],[x=>(x.tags||[]).join(' '),1]], 0.7));
+  const ds   = ruf('lokal','koos_search_daten',   {query:q}, treffer(frage, DSTORES,  [['name',5],[x=>(x.tags||[]).join(' '),1]], 0.7));
   const reg  = ruf('lokal','koos_search_regelung',{query:q}, treffer(frage, REGELUNGEN,[['name',5],['kontext',1],['entscheidung',1]], 0.6, false));
   const tom  = ruf('lokal','tom_katalog_suche',  {query:q}, treffer(frage, TOMS,     [['name',4],['beschreibung',1]], 0.5, false));
   /* search_knowledge wird nicht nachgebildet — ohne Index gäbe es nichts zu zählen. */
@@ -3047,7 +3107,7 @@ Löschfrist: ${v.frist||'—'}
 Drittland: ${v.drittland||'—'}
 Verarbeitungsmittel: ${v.software||'—'}
 Abgeleitete Schutzstufe: ${schutzstufe(v)||'nicht ableitbar — kein Datenspeicher verknüpft'}
-TOM-Verknüpfungen im Eintrag: ${(v.tom||[]).length?v.tom.join(', '):'keine'}
+TOM-Zuordnung (aus tom-${v.id}.json): ${((K.tom[v.id]||{}).soll||[]).length?((K.tom[v.id]||{}).soll||[]).join(', '):'keine Datei vorhanden'}
 Besonderheiten / Schwellenwert / Risiko: nicht abrufbar (DSMS-Datenbank nicht angebunden) — nicht schätzen`);
   }
 
@@ -3058,7 +3118,7 @@ Besonderheiten / Schwellenwert / Risiko: nicht abrufbar (DSMS-Datenbank nicht an
     t.push(`== Datenart ${d.name} ==
 Schutzstufe: ${d.schutz}${d.art9?' (besondere Kategorien nach Art. 9 DSGVO)':''}
 Schutzbedarf: ${d.bedarf||'—'}   Vertraulichkeit: ${d.vertraul||'—'}
-Datenkategorie: ${d.kategorie||'—'}   Zuständig: ${oeName(d.oe)}
+Zuständig: ${oeName(d.oe)}
 Rechtsgrundlagen: ${(d.rg||[]).join('; ')||'—'}
 Aufbewahrung: ${d.frist||'—'}
 Im VVT genutzt von ${nutzer.length} Verarbeitungstätigkeiten${nutzer.length?': '+nutzer.slice(0,8).map(x=>x.uid+' '+x.titel).join('; '):' — keine Verknüpfung, das ist ein Befund'}
@@ -3496,6 +3556,31 @@ function griffeAnlegen(){
 /* Datenquelle */
 $('#btn-reload').onclick=()=>datenLaden();
 $('#btn-ordner').onclick=()=>ordnerOeffnen();
+
+/* Admin-Buttons — Cache leeren + Index neu bauen */
+$('#btn-cache-refresh').onclick=async()=>{
+  const btn=$('#btn-cache-refresh');
+  btn.classList.add('admin-spin'); btn.disabled=true;
+  try{
+    const r=await fetch('/api/admin/cache/refresh',{method:'POST'});
+    const d=await r.json();
+    if(d.ok) toast('✅ Cache geleert — Daten werden beim nächsten Laden frisch vom Dateisystem gelesen');
+    else toast('❌ Cache-Refresh fehlgeschlagen: '+d.fehler);
+  }catch(e){ toast('❌ Server nicht erreichbar'); }
+  btn.classList.remove('admin-spin'); btn.disabled=false;
+};
+$('#btn-reindex').onclick=async()=>{
+  const btn=$('#btn-reindex');
+  if(!confirm('Index neu bauen? Dauert etwa 2 Minuten auf dem Server. Fortfahren?')) return;
+  btn.classList.add('admin-spin'); btn.disabled=true; toast('🏗️ Index wird neu gebaut …');
+  try{
+    const r=await fetch('/api/admin/reindex',{method:'POST'});
+    const d=await r.json();
+    if(d.ok) toast('✅ Index neu gebaut ('+d.output_tail.join('; ')+')');
+    else toast('❌ Reindex fehlgeschlagen: '+(d.fehler||'Exit '+d.exit_code));
+  }catch(e){ toast('❌ Server nicht erreichbar'); }
+  btn.classList.remove('admin-spin'); btn.disabled=false;
+};
 
 /* ── Start ─────────────────────────────────────────────────────────── */
 renderRail();

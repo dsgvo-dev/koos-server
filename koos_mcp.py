@@ -9,8 +9,9 @@ bereit. Parallel zum bestehenden KOOS-FastAPI-Server.
 Start (stdio — für Hermes Agent):
     python3 koos_mcp.py --mandant gemeinde-musterstadt
 
-Start (SSE — für Mattermost/OpenWebUI):
-    python3 koos_mcp.py --mandant gemeinde-musterstadt --transport sse
+Start (Streamable-HTTP — für nginx/OpenWebUI/Copilot, Umsetzungsplan Schritt 4):
+    python3 koos_mcp.py --mandant gemeinde-musterstadt --transport streamable-http
+    # oder per Container-Env: MCP_TRANSPORT=streamable-http
 
 Datenquelle: KOOS_DATA_DIR oder _input/koos-daten/<mandant>/
 """
@@ -50,6 +51,11 @@ KOOS_DATA_DIR = os.environ.get(
     str(KOOS_ROOT / "_input" / "koos-daten"),
 )
 
+# HTTP-Transport für den Container-Betrieb hinter nginx (Umsetzungsplan
+# Schritt 4, 20.09.2026). Default bleibt stdio (lokaler Hermes-Start).
+MCP_TRANSPORT = os.environ.get("MCP_TRANSPORT", "stdio")
+MCP_PORT      = int(os.environ.get("MCP_PORT", "8200"))
+
 # ══════════════════════════════════════════════════════════════════════════════
 # DATEN-LADER
 # ══════════════════════════════════════════════════════════════════════════════
@@ -60,7 +66,7 @@ class KoosLoader:
     def __init__(self, data_dir: Path):
         self.data_dir = data_dir
         self.koos_config: dict[str, Any] = {}
-        self.orga: dict[str, Any] = {}
+        self.orga: list[dict[str, Any]] = []
         self.prozesse: list[dict[str, Any]] = []
         self.daten: list[dict[str, Any]] = []
         self.regelungen: list[dict[str, Any]] = []
@@ -501,7 +507,7 @@ def _build_tools() -> list[Tool]:
     return [
         Tool(
             name="koos_search_oe",
-            description=f"Suche Organisationseinheiten in der {BRAND} KOOS-Datenbank. "
+            description=f"Suche Organisationseinheiten in der {BRAND}-Datenbank. "
                         "Optional filter nach parent_id.",
             inputSchema={
                 "type": "object",
@@ -517,7 +523,7 @@ def _build_tools() -> list[Tool]:
         ),
         Tool(
             name="koos_get_oe_tree",
-            description=f"Organigramm der {BRAND} KOOS-Organisation abrufen. Ohne root_id: alle OEs.",
+            description=f"Organigramm der {BRAND}-Organisation abrufen. Ohne root_id: alle OEs.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -530,7 +536,7 @@ def _build_tools() -> list[Tool]:
         ),
         Tool(
             name="koos_search_prozess",
-            description=f"Suche konkrete Verwaltungsprozesse in der {BRAND} KOOS-Datenbank nach "
+            description=f"Suche konkrete Verwaltungsprozesse in der {BRAND}-Datenbank nach "
                         "Name, OE oder Datenart (z. B. 'Wohngeld beantragen', "
                         "'Kfz-Zulassung'). Liefert die für DIESEN Prozess bereits "
                         "geprüfte, verbindliche Zuordnung (OE, Datenarten). "
@@ -559,7 +565,7 @@ def _build_tools() -> list[Tool]:
         ),
         Tool(
             name="koos_search_daten",
-            description=f"Suche Datenarten in der {BRAND} KOOS-Datenbank nach Name, Kategorie oder Schutzstufe. "
+            description=f"Suche Datenarten in der {BRAND}-Datenbank nach Name, Kategorie oder Schutzstufe. "
                         "Liefert die für diese Verwaltung bereits fachlich geprüfte, "
                         "verbindliche Schutzstufen-Klassifizierung (A-E) konkreter "
                         "Datenarten inkl. Rechtsgrundlage und Löschfrist — das ist "
@@ -584,7 +590,7 @@ def _build_tools() -> list[Tool]:
         ),
         Tool(
             name="koos_search_vvt",
-            description=f"Suche VVT-Einträge in der {BRAND} KOOS-Datenbank (Verzeichnis von Verarbeitungs"
+            description=f"Suche VVT-Einträge in der {BRAND}-Datenbank (Verzeichnis von Verarbeitungs"
                         "tätigkeiten, Art. 30 DSGVO) nach Titel/Zweck, OE oder "
                         "verknüpftem Prozess (Filter prozess_id). Liefert die "
                         "bereits dokumentierte, verbindliche Rechtsgrundlage, "
@@ -616,7 +622,7 @@ def _build_tools() -> list[Tool]:
         ),
         Tool(
             name="koos_search_regelung",
-            description=f"Suche interne Regelungen in der {BRAND} KOOS-Datenbank — Dienst"
+            description=f"Suche interne Regelungen in der {BRAND}-Datenbank — Dienst"
                         "anweisungen, Satzungen, Geschäftsordnungen (z. B. "
                         "'E-Mail', 'Cloud-Nutzung'). Liefert die bereits erlassene, "
                         "verbindliche Regelung inkl. Kontext, Entscheidung und "
@@ -654,7 +660,7 @@ def _build_tools() -> list[Tool]:
         ),
         Tool(
             name="koos_get_regelung_volltext",
-            description=f"Vollständiger, ungekürzter Text einer Regelung aus der {BRAND} KOOS-Datenbank "
+            description=f"Vollständiger, ungekürzter Text einer Regelung aus der {BRAND}-Datenbank "
                         "(Dienstanweisung, Satzung, Geschäftsordnung). "
                         "koos_search_regelung liefert bewusst nur einen kurzen "
                         "Auszug zur Übersicht — Details, die weiter hinten im "
@@ -678,7 +684,7 @@ def _build_tools() -> list[Tool]:
         ),
         Tool(
             name="koos_get_context",
-            description=f"Gesamtkontext einer Organisationseinheit in der {BRAND} KOOS-Datenbank: OE-Daten, "
+            description=f"Gesamtkontext einer Organisationseinheit in der {BRAND}-Datenbank: OE-Daten, "
                         "Prozesse, VVT-Einträge (inkl. Rechtsgrundlage, "
                         "Empfänger, Löschfrist, TOM) und Datenarten in einem "
                         "Aufruf. Praktisch, wenn zu einem Prozess bereits die "
@@ -714,7 +720,7 @@ async def _handle_call_tool(ctx, params: CallToolRequestParams) -> CallToolResul
         results = _loader.search_oe(query=query, parent_id=parent_id)
         return CallToolResult(content=[TextContent(
             type="text",
-            text=json.dumps(results, ensure_ascii=False, indent=2) + f"\n\n---\n*Quelle: {BRAND} KOOS-Datenbank*"
+            text=json.dumps(results, ensure_ascii=False, indent=2) + f"\n\n---\n*Quelle: {BRAND}-Datenbank*"
         )])
 
     elif name == "koos_get_oe_tree":
@@ -722,7 +728,7 @@ async def _handle_call_tool(ctx, params: CallToolRequestParams) -> CallToolResul
         results = _loader.get_oe_tree(root_id=root_id)
         return CallToolResult(content=[TextContent(
             type="text",
-            text=json.dumps(results, ensure_ascii=False, indent=2) + f"\n\n---\n*Quelle: {BRAND} KOOS-Datenbank*"
+            text=json.dumps(results, ensure_ascii=False, indent=2) + f"\n\n---\n*Quelle: {BRAND}-Datenbank*"
         )])
 
     elif name == "koos_search_prozess":
@@ -735,7 +741,7 @@ async def _handle_call_tool(ctx, params: CallToolRequestParams) -> CallToolResul
         results = _hybrid_erweitern(_loader, "proc", results, query)
         return CallToolResult(content=[TextContent(
             type="text",
-            text=json.dumps(results, ensure_ascii=False, indent=2) + f"\n\n---\n*Quelle: {BRAND} KOOS-Datenbank*"
+            text=json.dumps(results, ensure_ascii=False, indent=2) + f"\n\n---\n*Quelle: {BRAND}-Datenbank*"
         )])
 
     elif name == "koos_search_daten":
@@ -745,7 +751,7 @@ async def _handle_call_tool(ctx, params: CallToolRequestParams) -> CallToolResul
         results = _hybrid_erweitern(_loader, "dstore", results, query)
         return CallToolResult(content=[TextContent(
             type="text",
-            text=json.dumps(results, ensure_ascii=False, indent=2) + f"\n\n---\n*Quelle: {BRAND} KOOS-Datenbank*"
+            text=json.dumps(results, ensure_ascii=False, indent=2) + f"\n\n---\n*Quelle: {BRAND}-Datenbank*"
         )])
 
     elif name == "koos_search_vvt":
@@ -756,7 +762,7 @@ async def _handle_call_tool(ctx, params: CallToolRequestParams) -> CallToolResul
         results = _hybrid_erweitern(_loader, "vvt", results, query)
         return CallToolResult(content=[TextContent(
             type="text",
-            text=json.dumps(results, ensure_ascii=False, indent=2) + f"\n\n---\n*Quelle: {BRAND} KOOS-Datenbank*"
+            text=json.dumps(results, ensure_ascii=False, indent=2) + f"\n\n---\n*Quelle: {BRAND}-Datenbank*"
         )])
 
     elif name == "koos_search_regelung":
@@ -769,7 +775,7 @@ async def _handle_call_tool(ctx, params: CallToolRequestParams) -> CallToolResul
         results = _hybrid_erweitern(_loader, "reg", results, query)
         return CallToolResult(content=[TextContent(
             type="text",
-            text=json.dumps(results, ensure_ascii=False, indent=2) + f"\n\n---\n*Quelle: {BRAND} KOOS-Datenbank*"
+            text=json.dumps(results, ensure_ascii=False, indent=2) + f"\n\n---\n*Quelle: {BRAND}-Datenbank*"
         )])
 
     elif name == "koos_get_regelung_volltext":
@@ -786,7 +792,7 @@ async def _handle_call_tool(ctx, params: CallToolRequestParams) -> CallToolResul
             )])
         return CallToolResult(content=[TextContent(
             type="text",
-            text=json.dumps(result, ensure_ascii=False, indent=2) + f"\n\n---\n*Quelle: {BRAND} KOOS-Datenbank*"
+            text=json.dumps(result, ensure_ascii=False, indent=2) + f"\n\n---\n*Quelle: {BRAND}-Datenbank*"
         )])
 
     elif name == "koos_get_context":
@@ -798,7 +804,7 @@ async def _handle_call_tool(ctx, params: CallToolRequestParams) -> CallToolResul
         context = _loader.get_context(oe_id=oe_id)
         return CallToolResult(content=[TextContent(
             type="text",
-            text=json.dumps(context, ensure_ascii=False, indent=2) + f"\n\n---\n*Quelle: {BRAND} KOOS-Datenbank*"
+            text=json.dumps(context, ensure_ascii=False, indent=2) + f"\n\n---\n*Quelle: {BRAND}-Datenbank*"
         )])
 
     else:
@@ -824,29 +830,45 @@ async def main():
         help="KOOS-Datenverzeichnis (überschreibt automatische Suche)"
     )
     parser.add_argument(
-        "--transport", choices=["stdio", "sse"], default="stdio",
-        help="Transport-Protokoll (default: stdio)"
+        "--transport", choices=["stdio", "streamable-http"],
+        default=MCP_TRANSPORT,
+        help="Transport-Protokoll (default: stdio, überschreibbar per "
+             "MCP_TRANSPORT-Umgebungsvariable für den Container-Betrieb)"
     )
-    parser.add_argument("--port", type=int, default=8200, help="Port für SSE")
+    parser.add_argument(
+        "--port", type=int, default=MCP_PORT,
+        help="Port für streamable-http (default: 8200 bzw. MCP_PORT)"
+    )
     args = parser.parse_args()
 
     # Datenverzeichnis bestimmen
     if args.data_dir:
-        data_root = Path(args.data_dir)
+        # Explizit gesetzt (KOOS_DATA_DIR/--data-dir) heisst laut Konvention
+        # im gesamten uebrigen Code (main.py/config.py, start.sh, README,
+        # alle Rollout-Docs) IMMER: das ist bereits das fertige
+        # Datenverzeichnis dieses einen Mandanten, kein gemeinsames
+        # Wurzelverzeichnis mit weiterem <mandant>-Unterordner darunter.
+        # Nur der interne Default (_input/koos-daten/, nie befuellt, siehe
+        # unten) ist ein echtes Mehrmandanten-Wurzelverzeichnis und braucht
+        # die Mandanten-Ebene. Fix 21.09.2026 (gegengeprueft mit Hermes):
+        # vorher wurde hier IMMER data_root/mandant gebildet, auch bei
+        # explizit gesetztem --data-dir - das brach im Container-Deployment
+        # (docker-compose mountet bereits den mandantenspezifischen
+        # Host-Pfad direkt nach /data, siehe deploy/docker-compose.yml.j2).
+        mandant_dir = Path(args.data_dir)
     else:
         data_root = BASE_DIR / "_input" / "koos-daten"
-
-    mandant_dir = data_root / args.mandant
-    if not mandant_dir.is_dir():
-        # Fallback: direktes Datenverzeichnis (kein Mandanten-Ordner)
-        if args.mandant == "blueprint":
-            mandant_dir = data_root
-        else:
-            print(f"Fehler: Mandanten-Verzeichnis nicht gefunden: {mandant_dir}",
-                  file=sys.stderr)
-            print(f"Erwartet: {data_root}/{args.mandant}/ oder {data_root}/",
-                  file=sys.stderr)
-            sys.exit(1)
+        mandant_dir = data_root / args.mandant
+        if not mandant_dir.is_dir():
+            # Fallback: direktes Datenverzeichnis (kein Mandanten-Ordner)
+            if args.mandant == "blueprint":
+                mandant_dir = data_root
+            else:
+                print(f"Fehler: Mandanten-Verzeichnis nicht gefunden: {mandant_dir}",
+                      file=sys.stderr)
+                print(f"Erwartet: {data_root}/{args.mandant}/ oder {data_root}/",
+                      file=sys.stderr)
+                sys.exit(1)
 
     # Zweiter Fallback: das eigentliche Produktivverzeichnis der KOOS-Daten
     # (koos-knowledge/_daten/) statt des ursprünglich vorgesehenen, aber nie
@@ -874,31 +896,40 @@ async def main():
     server.add_request_handler("tools/list", ListToolsRequest, _handle_list_tools)
     server.add_request_handler("tools/call", CallToolRequestParams, _handle_call_tool)
 
-    if args.transport == "sse":
-        from mcp.server.sse import SseServerTransport
-        from starlette.applications import Starlette
-        from starlette.routing import Mount, Route
+    if args.transport == "streamable-http":
+        import contextlib
+
         import uvicorn
+        from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+        from starlette.applications import Starlette
+        from starlette.routing import Mount
 
-        sse = SseServerTransport("/messages/")
+        session_manager = StreamableHTTPSessionManager(app=server, json_response=False)
 
-        async def handle_sse(request):
-            async with sse.connect_sse(
-                request.scope, request.receive, request._send
-            ) as streams:
-                await server.run(
-                    streams[0], streams[1],
-                    server.create_initialization_options()
-                )
+        async def handle_mcp(scope, receive, send):
+            await session_manager.handle_request(scope, receive, send)
+
+        @contextlib.asynccontextmanager
+        async def lifespan(_app):
+            async with session_manager.run():
+                yield
 
         app = Starlette(
-            routes=[
-                Route("/sse", endpoint=handle_sse),
-                Mount("/messages/", app=sse.handle_post_message),
-            ],
+            routes=[Mount("/mcp", app=handle_mcp)],
+            lifespan=lifespan,
         )
-        print(f"KOOS-MCP SSE auf Port {args.port}", file=sys.stderr)
-        uvicorn.run(app, host="0.0.0.0", port=args.port)
+        print(f"KOOS-MCP Streamable-HTTP auf Port {args.port} (/mcp)",
+              file=sys.stderr)
+        # uvicorn.run() darf nicht aus einer bereits laufenden Event-Loop
+        # heraus aufgerufen werden (main() laeuft schon unter asyncio.run()
+        # weiter unten) - startet sonst intern eine zweite Loop und wirft
+        # "Cannot run the event loop while another loop is running". Fix
+        # vom 21.09.2026, identischer Bug und identischer Fix wie in
+        # dsms_mcp.py: async-native uvicorn-API statt der synchronen
+        # uvicorn.run()-Fassade, die dafuer gedacht ist, selbst die Loop zu
+        # starten (Skript-Einstieg), nicht aus einer Coroutine heraus.
+        config = uvicorn.Config(app, host="0.0.0.0", port=args.port)
+        await uvicorn.Server(config).serve()
     else:
         async with stdio_server() as (read_stream, write_stream):
             await server.run(

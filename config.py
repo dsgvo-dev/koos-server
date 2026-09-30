@@ -13,7 +13,7 @@ _default_data = Path(__file__).parent.parent
 DATA_DIR: Path = Path(os.environ.get("KOOS_DATA_DIR", str(_default_data))).resolve()
 
 # Host und Port des Servers
-HOST: str = os.environ.get("KOOS_HOST", "0.0.0.0")
+HOST: str = os.environ.get("KOOS_HOST", "127.0.0.1")
 PORT: int = int(os.environ.get("KOOS_PORT", "8090"))
 
 # Erlaubte CORS-Ursprünge (für Entwicklung offen, in Produktion einschränken)

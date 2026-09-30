@@ -638,6 +638,15 @@ def parse_daten_md(dateiname: str, text: str) -> dict:
             "beginn":  ab.get("beginn", None),
             "hinweis": ab.get("hinweis", ""),
         },
+        # Informationssicherheitssicht (BSI). Steht seit dem 2026-08-10 in allen
+        # Quelldateien, wurde bisher aber nicht ausgeliefert. Feldnamen wie in
+        # der Datei, damit Datei und Schnittstelle dieselbe Sprache sprechen.
+        "bsi-vertraulichkeit": kl.get("bsi-vertraulichkeit", ""),
+        "bsi-integritaet":     kl.get("bsi-integritaet", ""),
+        "bsi-verfuegbarkeit":  kl.get("bsi-verfuegbarkeit", ""),
+        "bsi-schutzbedarf":    kl.get("bsi-schutzbedarf", ""),
+        # Schlagworte: stehen im Frontmatter, wurden bisher nicht ausgeliefert.
+        "tags":       meta.get("tags") or [],
         "definition": "",
         "inhalte":    [],
     }
