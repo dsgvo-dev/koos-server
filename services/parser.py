@@ -8,7 +8,10 @@ import io
 import re
 from pathlib import Path
 from typing import Any
+import logging
 import yaml
+
+log = logging.getLogger("koos.parser")
 
 # ── Round-Trip-YAML (optional) ────────────────────────────────────────────────
 # PyYAML liest YAML und schreibt es neu — Kommentare, Anführungszeichen und die
@@ -372,22 +375,51 @@ def parse_prozess_md(dateiname: str, text: str) -> dict:
         # {rolle, phase, aufgabe} (45 Dateien). Beide werden durchgereicht —
         # wer nur `einheit` liest, bekommt bei der zweiten Form einen leeren Wert,
         # verliert die Angabe aber nicht mehr beim Speichern.
-        "beteiligte": [
-            {
-                "einheit": b.get("einheit", ""),
-                "rolle":   b.get("rolle", ""),
-                "phase":   str(b.get("phase", "")) if b.get("phase") is not None else "",
-                "aufgabe": b.get("aufgabe", ""),
-            }
-            for b in (meta.get("beteiligte") or [])
-        ],
-        "daten":       meta.get("daten", {"input": [], "output": [], "datenspeicher": []}),
+        "beteiligte": _beteiligte_lesen(dateiname, meta.get("beteiligte")),
+        "daten":       _daten_lesen(dateiname, meta.get("daten")),
         "regelungen":  meta.get("regelungen", []),
         "leika_id":    meta.get("leika_id"),
         "ozg_id":      meta.get("ozg_id"),
         "schritte":    schritte,
         "letzte_aktualisierung": meta.get("letzte-aktualisierung", ""),
     }
+
+
+def _beteiligte_lesen(dateiname: str, roh: Any) -> list[dict]:
+    """Liest `beteiligte` tolerant. Schemaform sind Objekte ({einheit, aufgabe}
+    oder {rolle, phase, aufgabe}). Eine Textzeile (Schemaabweichung) wird als
+    {rolle: <Text>} gelesen statt die ganze Prozessliste abbrechen zu lassen,
+    und im Log gemeldet (Nebenbefund 30.09., proc-telefonie-…)."""
+    ergebnis = []
+    for b in (roh or []):
+        if isinstance(b, str):
+            log.warning("Schemaabweichung %s: beteiligte-Eintrag ist Text statt Objekt: %r", dateiname, b)
+            b = {"rolle": b}
+        elif not isinstance(b, dict):
+            log.warning("Schemaabweichung %s: beteiligte-Eintrag übersprungen: %r", dateiname, b)
+            continue
+        ergebnis.append({
+            "einheit": b.get("einheit", ""),
+            "rolle":   b.get("rolle", ""),
+            "phase":   str(b.get("phase", "")) if b.get("phase") is not None else "",
+            "aufgabe": b.get("aufgabe", ""),
+        })
+    return ergebnis
+
+
+def _daten_lesen(dateiname: str, roh: Any) -> dict:
+    """Liest `daten` tolerant. Schemaform ist {input, output, datenspeicher}.
+    Eine reine Liste (Schemaabweichung) wird als input gelesen und im Log
+    gemeldet — sonst brechen Statistik und Dashboard an `.get()` ab."""
+    if roh is None:
+        return {"input": [], "output": [], "datenspeicher": []}
+    if isinstance(roh, dict):
+        return roh
+    if isinstance(roh, list):
+        log.warning("Schemaabweichung %s: daten ist eine Liste statt {input, output, datenspeicher}", dateiname)
+        return {"input": roh, "output": [], "datenspeicher": []}
+    log.warning("Schemaabweichung %s: daten hat unerwarteten Typ %s", dateiname, type(roh).__name__)
+    return {"input": [], "output": [], "datenspeicher": []}
 
 
 def parse_prozess_body(text: str) -> str:
