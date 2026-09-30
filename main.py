@@ -90,6 +90,54 @@ async def no_cache_api(request: Request, call_next) -> Response:
         response.headers["Pragma"] = "no-cache"
     return response
 
+# ── Schreibschutz (PLAN-2026-09-30, Zwischenlösung bis ADR-016 Weg 1) ────────
+# Jeder nicht-lesende Aufruf unter /api/ braucht X-Forwarded-User. Den Header
+# setzt ausschließlich nginx nach auth_basic (proxy_set_header überschreibt,
+# was ein Client mitschickt). Der Name wird nur geprüft, nicht gespeichert —
+# der Commit-Autor bleibt KOOS-Server (ADR-016 E4).
+_SCHREIBEND = {"POST", "PUT", "PATCH", "DELETE"}
+
+
+def _angemeldeter_nutzer(request: Request) -> str:
+    return request.headers.get("x-forwarded-user", "").strip()
+
+
+if config.AUTH_MODUS not in ("proxy", "aus"):
+    log.error("KOOS_AUTH hat einen ungültigen Wert: %r (erlaubt: proxy, aus)", config.AUTH_MODUS)
+    sys.exit(1)
+log.info("Schreibschutz: %s", config.AUTH_MODUS)
+
+
+@app.middleware("http")
+async def schreibschutz(request: Request, call_next) -> Response:
+    if (
+        config.AUTH_MODUS == "proxy"
+        and request.method in _SCHREIBEND
+        and request.url.path.startswith("/api/")
+        and not _angemeldeter_nutzer(request)
+    ):
+        return JSONResponse(status_code=401, content={"detail": "Anmeldung erforderlich"})
+    return await call_next(request)
+
+
+@app.get("/api/ich", tags=["System"], summary="Angemeldeter Nutzer")
+def get_ich(request: Request) -> dict:
+    """
+    Wer ist angemeldet? Entscheidung 2, Option 2 (30.09.): Jeder bei nginx
+    angemeldete Nutzer ist in der Oberfläche Superadmin, bis ADR-016 Weg 1
+    Rollen im Server einführt.
+    """
+    if config.AUTH_MODUS == "aus":
+        return {"angemeldet": True, "benutzer": "lokal", "rolle": "superadmin", "modus": "aus"}
+    name = _angemeldeter_nutzer(request)
+    return {
+        "angemeldet": bool(name),
+        "benutzer":   name,
+        "rolle":      "superadmin" if name else None,
+        "modus":      "proxy",
+    }
+
+
 # ── API-Router ────────────────────────────────────────────────────────────────
 app.include_router(orga.router)
 app.include_router(prozesse.router)

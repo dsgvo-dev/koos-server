@@ -18,10 +18,13 @@ fi
 export KOOS_HOST="${KOOS_HOST:-127.0.0.1}"
 export KOOS_PORT="${KOOS_PORT:-8090}"
 export KOOS_DATA_DIR="${KOOS_DATA_DIR:-$SCRIPT_DIR/../_daten}"
+# Lokal ohne nginx: kein Schreibschutz (PLAN-2026-09-30). Im Container gilt "proxy".
+export KOOS_AUTH="${KOOS_AUTH:-aus}"
 
 echo "=== KOOS Server ==="
 echo "Host:     $KOOS_HOST:$KOOS_PORT"
 echo "Daten:    $KOOS_DATA_DIR"
+echo "Auth:     $KOOS_AUTH"
 echo "URL:      http://localhost:$KOOS_PORT"
 echo "API-Docs: http://localhost:$KOOS_PORT/api/docs"
 echo ""

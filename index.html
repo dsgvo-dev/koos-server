@@ -1615,41 +1615,22 @@ const DATEN     = [];   // wird von apiDatenLaden() aus /api/daten gefuellt
 //  Superadmin-konfigurierbar. Spiegelt den Abschnitt "formular-schema" in
 //  koos.yaml. Felder hier ändern → alle Eingabemasken passen sich automatisch an.
 //
-//  Passwort ändern:
-//    Neuen Hash erzeugen (Browser-Konsole):
-//    crypto.subtle.digest('SHA-256', new TextEncoder().encode('NEUES-PW'))
-//      .then(b => console.log(Array.from(new Uint8Array(b))
-//        .map(x=>x.toString(16).padStart(2,'0')).join('')))
+//  Passwörter: nicht mehr hier. Anmeldung über nginx (htpasswd), siehe
+//  PLAN-2026-09-30-koos-server-absicherung-zwischenloesung.md.
 // ═══════════════════════════════════════════════════════════════════════════
 
 // CONFIG wird beim Start asynchron von /api/config geladen.
-// Fallback: Hardcodierte Werte für den Fall dass der Server nicht erreichbar ist.
-// Nach Umstieg auf Server-Betrieb müssen die Fallback-Werte NICHT mehr gepflegt werden.
 let CONFIG = {
-  superadminHash: "5ad7c2af9ba7115b557f91e29e98af07c0e73751930b510d5bac0c26f224decc",
-  subadmins: [
-    {
-      id: "sub-fb1", name: "Fachbereich 1 – Personal & IT",
-      hash: "2e09c6dc151c08685424617d46848a44a6ee5f053a0d18f8defd0616501151e5",
-      zustaendigFuer: ["oe-fb1-personal","oe-fb1-it","oe-fb1-buerger","oe-fb1"]
-    },
-    {
-      id: "sub-hvb", name: "Hauptverwaltungsbereich",
-      hash: "a1d25b71e601b052c656eb488ec650d5b78723e0bbf1515771bf2e1b8baf7a1c",
-      zustaendigFuer: ["oe-hvb","oe-stabsstelle","oe-personalrat"]
-    }
-  ],
+  // Keine Passwort-Hashes mehr (PLAN-2026-09-30): Anmeldung über nginx, Rolle aus api/ich.
   organisation: { name: "", kurzname: "" }
 };
 
 async function ladeServerConfig() {
   try {
-    const r = await fetch("/api/config");
+    const r = await fetch("api/config");
     if (!r.ok) return;
     const data = await r.json();
     // Server-Werte übernehmen (überschreibt Fallback)
-    if (data.superadminHash) CONFIG.superadminHash = data.superadminHash;
-    if (Array.isArray(data.subadmins)) CONFIG.subadmins = data.subadmins;
     if (data.organisation) CONFIG.organisation = data.organisation;
     // Kontrolliertes Vokabular aus koos.yaml (E5). Die Listen stehen dort als
     // {Wert: Erläuterung}; für die Maske zählen die Schlüssel. Eine reine
@@ -2982,7 +2963,7 @@ async function sendMessage() {
   const antwortEl = addMsg("", "ai");
 
   try {
-    const resp = await fetch("/api/chat/stream", {
+    const resp = await fetch("api/chat/stream", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({
@@ -3036,7 +3017,7 @@ let _aktivesOllamaModell = "";
 
 (async () => {
   try {
-    const resp = await fetch("/api/chat/status");
+    const resp = await fetch("api/chat/status");
     const data = await resp.json();
 
     if (!data.verfuegbar) {
@@ -3212,11 +3193,6 @@ function renderInlineEdit(typ, datensatz, detailContentEl, detailPanelEl) {
 //  EDIT-MODUS — Login, Formular-Renderer, YAML-Generator
 // ═══════════════════════════════════════════════════════════════════════════
 
-// ── Passwort-Hash (SHA-256) ────────────────────────────────────────────────
-async function hashStr(s) {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,"0")).join("");
-}
 
 // ── Login-Zustand ─────────────────────────────────────────────────────────
 let _eingeloggt     = false;
@@ -3275,11 +3251,8 @@ document.getElementById("edit-toggle").addEventListener("click", () => {
     // Bereits aktiv → ausschalten
     editModusUmschalten(false);
   } else if (!_eingeloggt) {
-    // Noch nicht angemeldet → Login-Modal
-    document.getElementById("login-modal").hidden = false;
-    document.getElementById("login-error").hidden = true;
-    document.getElementById("login-input").value  = "";
-    setTimeout(() => document.getElementById("login-input").focus(), 50);
+    // Nicht angemeldet: die Anmeldung liegt bei nginx, nicht im Browser
+    zeigeToast("Bearbeiten nur nach Anmeldung am Server", "err");
   } else {
     // Angemeldet → Edit-Modus direkt aktivieren (Server übernimmt das Speichern)
     editModusUmschalten(true);
@@ -3380,35 +3353,7 @@ async function ordnerOeffnenDannBearbeiten() {
   }
 }
 
-// Login bestätigen
-async function loginPruefen() {
-  const pw   = document.getElementById("login-input").value;
-  const hash = await hashStr(pw);
-
-  // 1. Superadmin?
-  if (hash === CONFIG.superadminHash) {
-    _userRolle      = "superadmin";
-    _userName       = "Superadmin";
-    _userZustaendig = [];   // leer = alle OE
-    _loginErfolgreich();
-    return;
-  }
-
-  // 2. Subadmin?
-  const sub = CONFIG.subadmins.find(s => s.hash === hash);
-  if (sub) {
-    _userRolle      = "subadmin";
-    _userName       = sub.name;
-    _userZustaendig = sub.zustaendigFuer;
-    _loginErfolgreich();
-    return;
-  }
-
-  // 3. Falsch
-  document.getElementById("login-error").hidden = false;
-  document.getElementById("login-input").value  = "";
-  document.getElementById("login-input").focus();
-}
+// Passwortprüfung im Browser entfernt (PLAN-2026-09-30, Schritt 8).
 
 function _loginErfolgreich() {
   document.getElementById("login-modal").hidden = true;
@@ -3438,11 +3383,6 @@ function _loginErfolgreich() {
   }
 }
 
-document.getElementById("login-btn").addEventListener("click", loginPruefen);
-document.getElementById("login-input").addEventListener("keydown", e => {
-  if (e.key === "Enter")  loginPruefen();
-  if (e.key === "Escape") document.getElementById("login-modal").hidden = true;
-});
 document.getElementById("login-abbrechen").addEventListener("click", () => {
   document.getElementById("login-modal").hidden = true;
 });
@@ -3691,7 +3631,7 @@ async function _prozessBodyNachladen(el, ds) {
   const id = ds?._dateiname || ds?.id;
   if (!id) { _bodyOffen = false; return; }
   try {
-    const r = await fetch(`/api/prozesse/${encodeURIComponent(id)}?section=body`);
+    const r = await fetch(`api/prozesse/${encodeURIComponent(id)}?section=body`);
     if (!r.ok) throw new Error(`Server: ${r.status}`);
     el.value = await r.text();
     _bodyOffen = false;
@@ -4699,10 +4639,10 @@ async function apiDatenLaden() {
   try {
     const OPT = { cache: "no-store" };
     const [orga, prozesse, daten, regelungen] = await Promise.all([
-      fetch("/api/orga",       OPT).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }),
-      fetch("/api/prozesse",   OPT).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }),
-      fetch("/api/daten",      OPT).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }),
-      fetch("/api/regelungen", OPT).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }),
+      fetch("api/orga",       OPT).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }),
+      fetch("api/prozesse",   OPT).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }),
+      fetch("api/daten",      OPT).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }),
+      fetch("api/regelungen", OPT).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }),
     ]);
 
     ORG_UNITS.length  = 0; orga.forEach(u      => ORG_UNITS.push(u));
@@ -4767,8 +4707,29 @@ async function apiDatenLaden() {
   });
 })();
 
+// Anmeldung vom Server übernehmen (PLAN-2026-09-30, Entscheidung 2 Option 2):
+// nginx meldet an, api/ich sagt wer. Alle Angemeldeten sind Superadmin.
+async function ladeAnmeldung() {
+  try {
+    const r = await fetch("api/ich", { cache: "no-store" });
+    if (!r.ok) return;
+    const ich = await r.json();
+    if (!ich.angemeldet) return;
+    _eingeloggt     = true;
+    _userRolle      = "superadmin";
+    _userName       = ich.benutzer || "";
+    _userZustaendig = [];
+    const info = document.getElementById("edit-user-info");
+    info.textContent = `Angemeldet: ${_userName}`;
+    info.hidden = false;
+    document.getElementById("tab-admin").classList.add("sichtbar");
+  } catch (e) {
+    // Kein Server → Bearbeiten bleibt gesperrt
+  }
+}
+
 // Beim Laden sofort Konfiguration + Daten holen, dann Startseite anzeigen
-ladeServerConfig().then(() => {
+Promise.all([ladeServerConfig(), ladeAnmeldung()]).then(() => {
   apiDatenLaden();
   document.getElementById("panel-home").classList.add("active");
   ladeHomeStats();
@@ -4831,7 +4792,7 @@ async function formularSpeichernDirekt(typ, daten, begruendung = "") {
       ? { einheiten: aktuelleEinheiten, _begruendung: begruendung }
       : aktuelleEinheiten;
 
-    const r = await fetch("/api/orga", {
+    const r = await fetch("api/orga", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -4841,10 +4802,10 @@ async function formularSpeichernDirekt(typ, daten, begruendung = "") {
   } else {
     // Prozess, Datenart oder Regelung: PUT /api/{typ}/{id}
     const apiPfad = typ === "prozess"
-      ? `/api/prozesse/${encodeURIComponent(daten._dateiname || daten.id)}`
+      ? `api/prozesse/${encodeURIComponent(daten._dateiname || daten.id)}`
       : typ === "regelung"
-        ? `/api/regelungen/${encodeURIComponent(daten._dateiname || daten.id)}`
-        : `/api/daten/${encodeURIComponent(daten._dateiname || daten.id)}`;
+        ? `api/regelungen/${encodeURIComponent(daten._dateiname || daten.id)}`
+        : `api/daten/${encodeURIComponent(daten._dateiname || daten.id)}`;
 
     // Begründung im JSON-Body mitschicken (für git-Commit-Body)
     const payload = begruendung ? { ...daten, _begruendung: begruendung } : daten;
@@ -4882,7 +4843,7 @@ let _homeStatsDaten = null;
 async function ladeHomeStats() {
   if (_homeStatsDaten) { _renderHomeStats(_homeStatsDaten); return; }
   try {
-    const r = await fetch(`/api/config/dashboard?t=${Date.now()}`, { cache: "no-store" });
+    const r = await fetch(`api/config/dashboard?t=${Date.now()}`, { cache: "no-store" });
     if (!r.ok) return;
     _homeStatsDaten = await r.json();
     _renderHomeStats(_homeStatsDaten);
@@ -4910,7 +4871,7 @@ document.addEventListener("click", e => {
 async function ladeAdminDashboard() {
   if (_adminDatenGeladen) return;  // Bereits geladen
   try {
-    const r = await fetch(`/api/config/dashboard?t=${Date.now()}`, { cache: "no-store" });
+    const r = await fetch(`api/config/dashboard?t=${Date.now()}`, { cache: "no-store" });
     if (!r.ok) throw new Error(`Server: ${r.status}`);
     const d = await r.json();
     _adminDatenGeladen = true;
@@ -5069,7 +5030,7 @@ async function ladeAuditLog(n = 30) {
   const wrap = document.getElementById("audit-log-wrap");
   if (!wrap) return;
   try {
-    const r = await fetch(`/api/audit?n=${n}&t=${Date.now()}`, { cache: "no-store" });
+    const r = await fetch(`api/audit?n=${n}&t=${Date.now()}`, { cache: "no-store" });
     if (!r.ok) throw new Error(`Server: ${r.status}`);
     const eintraege = await r.json();
     renderAuditLog(wrap, eintraege);
@@ -5144,7 +5105,7 @@ async function revertCommit(hash, beschreibung, btnEl) {
   btnEl.disabled = true;
   btnEl.textContent = "…";
   try {
-    const r = await fetch(`/api/audit/${encodeURIComponent(hash)}/revert`, {
+    const r = await fetch(`api/audit/${encodeURIComponent(hash)}/revert`, {
       method: "POST",
       cache: "no-store",
     });
@@ -5192,7 +5153,7 @@ async function zeigeDiff(hash, beschreibung) {
   modal.hidden = false;
 
   try {
-    const r = await fetch(`/api/audit/${encodeURIComponent(hash)}/diff?t=${Date.now()}`, { cache: "no-store" });
+    const r = await fetch(`api/audit/${encodeURIComponent(hash)}/diff?t=${Date.now()}`, { cache: "no-store" });
     if (!r.ok) throw new Error(`Server ${r.status}`);
     const d = await r.json();
     const html = (d.diff || "(kein Diff verfügbar)")

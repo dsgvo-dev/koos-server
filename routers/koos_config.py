@@ -1,7 +1,7 @@
 """
 KOOS Server – Router: Konfiguration
-GET  /api/config           → Konfiguration aus koos.yaml: Auth (superadminHash,
-                             subadmins), Organisation, kontrolliertes Vokabular
+GET  /api/config           → Konfiguration aus koos.yaml: Organisation,
+                             kontrolliertes Vokabular (ohne Passwort-Hashes)
 GET  /api/config/dashboard → Kombinierten Stats-Überblick für das Admin-Dashboard
 """
 from __future__ import annotations
@@ -24,38 +24,22 @@ def _lade_koos_yaml() -> dict:
     return yaml.safe_load(text) or {}
 
 
-@router.get("", summary="Auth-Konfiguration aus koos.yaml")
+@router.get("", summary="Konfiguration aus koos.yaml")
 def get_config() -> dict:
     """
-    Gibt die für die Browser-App benötigte Auth-Konfiguration zurück.
-    Entspricht dem hardcodierten CONFIG-Block in preview.html,
-    wird aber live aus koos.yaml gelesen.
+    Gibt die für die Browser-App benötigte Konfiguration zurück:
+    Organisation und kontrolliertes Vokabular.
 
-    Sicherheitshinweis: Die Passwort-Hashes (SHA-256) sind dieselben
-    die ohnehin im HTML-Quelltext stehen — kein zusätzliches Risiko.
+    Keine Passwort-Hashes mehr (PLAN-2026-09-30, Schritt 7). Die Anmeldung
+    übernimmt nginx; wer angemeldet ist, liefert GET /api/ich.
     """
     daten = _lade_koos_yaml()
-    bear  = daten.get("bearbeitung") or {}
-    sa    = bear.get("superadmin") or {}
-
-    superadmin_hash = sa.get("passwort-hash", "")
-
-    subadmins = []
-    for sub in (bear.get("subadmins") or []):
-        subadmins.append({
-            "id":            sub.get("id", ""),
-            "name":          sub.get("name", ""),
-            "hash":          sub.get("passwort-hash", ""),
-            "zustaendigFuer": sub.get("zustaendig-fuer", []),
-        })
 
     # Organisationsinformationen
     org = daten.get("organisation") or {}
     ap  = org.get("ansprechpartner") or {}
 
     return {
-        "superadminHash": superadmin_hash,
-        "subadmins":      subadmins,
         # Kontrolliertes Vokabular — koos.yaml ist die alleinige Quelle (E5).
         # Das Frontend befüllt seine Konstante VOKABULAR hieraus.
         "vokabular":      daten.get("vokabular") or {},

@@ -21,6 +21,12 @@ CORS_ORIGINS: list[str] = os.environ.get(
     "KOOS_CORS_ORIGINS", "http://localhost:8090,http://127.0.0.1:8090"
 ).split(",")
 
+# Schreibschutz (PLAN-2026-09-30, Zwischenlösung bis ADR-016 Weg 1):
+#   proxy — POST/PUT/PATCH/DELETE unter /api/ nur mit Header X-Forwarded-User,
+#           den nginx nach der Anmeldung (auth_basic) setzt. Standard.
+#   aus   — keine Prüfung; nur für den lokalen Betrieb ohne nginx (start.sh).
+AUTH_MODUS: str = os.environ.get("KOOS_AUTH", "proxy").strip().lower()
+
 # Git-Commit-Autor (Name, E-Mail) für den Audit-Trail
 GIT_AUTHOR_NAME:  str = os.environ.get("KOOS_GIT_AUTHOR_NAME",  "KOOS-Server")
 GIT_AUTHOR_EMAIL: str = os.environ.get("KOOS_GIT_AUTHOR_EMAIL", "koos@localhost")
