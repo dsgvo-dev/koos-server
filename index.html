@@ -952,6 +952,9 @@
     #admin-inner .admin-subtitle { font-size: 13px; color: #666; margin: 0 0 28px; }
 
     .admin-section { margin-bottom: 32px; }
+    .org-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px 16px; }
+    .org-form label { display: flex; flex-direction: column; font-size: 12px; color: #555; gap: 4px; }
+    .org-form input { padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; }
     .admin-section h2 { font-size: 14px; font-weight: 600; text-transform: uppercase;
       letter-spacing: .05em; color: #444; margin: 0 0 12px;
       padding-bottom: 6px; border-bottom: 1px solid #e5e5e5; }
@@ -1490,6 +1493,21 @@
       <div id="admin-inner">
         <h1>Admin-Dashboard</h1>
         <p class="admin-subtitle">Datenqualität und Systemübersicht — nur für Superadmin sichtbar</p>
+        <div class="admin-section" id="admin-org">
+          <h2>Organisation</h2>
+          <form id="org-form" class="org-form">
+            <label>Name <input name="name" required></label>
+            <label>Kurzname <input name="kurzname"></label>
+            <label>Rechtsform <input name="rechtsform"></label>
+            <label>Rechtsgrundlage <input name="rechtsgrundlage"></label>
+            <label>Gemeindeschlüssel (8 Ziffern) <input name="gemeindeschluessel" pattern="[0-9]{8}"></label>
+            <label>Bundesland <input name="bundesland"></label>
+            <label>Kreis <input name="kreis"></label>
+            <label>Ansprechpartner <input name="ap_name"></label>
+            <label>E-Mail <input name="ap_email" type="email"></label>
+            <div><button type="submit" class="btn-primary">Organisation speichern</button></div>
+          </form>
+        </div>
         <div id="admin-laden">Daten werden geladen …</div>
         <div id="admin-content" hidden></div>
       </div>
@@ -1602,7 +1620,18 @@
 
 // ── OE: flaches Modell mit parent-Referenz ────────────────────────────────
 // Reorganisation: parent-Wert ändern → Baum wird automatisch neu berechnet.
-const ORG_NAME = "Gemeindeverwaltung Musterstadt";
+// Name der Organisation: kommt ausschließlich aus koos.yaml über api/config
+// (PLAN-2026-10-01, Schritt 1). Kein fest eingetragener Name mehr.
+let ORG_NAME = "";
+let ORG_KURZ = "";
+
+function _zeigeOrgName() {
+  const kurz = ORG_KURZ || ORG_NAME || "KOOS";
+  document.getElementById("app-title").textContent = kurz;
+  document.getElementById("org-name").textContent  = ORG_NAME || kurz;
+  const homeEl = document.getElementById("home-org-name");
+  if (homeEl) homeEl.textContent = ORG_NAME || kurz;
+}
 
 const ORG_UNITS = [];   // wird von apiDatenLaden() aus /api/orga gefuellt
 
@@ -1652,8 +1681,10 @@ async function ladeServerConfig() {
     }
     // App-Titel setzen
     const org = data.organisation || {};
-    const titelEl = document.getElementById("app-title");
-    if (titelEl && org.kurzname) titelEl.textContent = org.kurzname;
+    CONFIG.organisation = org;
+    ORG_NAME = org.name || "";
+    ORG_KURZ = org.kurzname || "";
+    _zeigeOrgName();
     // Home-Panel mit Org-Daten befüllen
     _befuelleHomeOrg(org);
   } catch (e) {
@@ -3065,10 +3096,7 @@ chatInput.addEventListener("input", () => {
 //  INIT
 // ═══════════════════════════════════════════════════════════════════════════
 
-document.getElementById("app-title").textContent = ORG_NAME;
-document.getElementById("org-name").textContent  = ORG_NAME;
-// Home-Panel: Fallback-Name vorbelegen (wird von ladeServerConfig() überschrieben)
-document.getElementById("home-org-name").textContent = ORG_NAME;
+_zeigeOrgName();   // vor dem Laden: "KOOS"; ladeServerConfig() setzt den Namen
 const treeRoot = document.getElementById("tree");
 buildTreeDOM(buildOrgTree(), treeRoot, 1);
 buildProzesseListe();
@@ -4553,8 +4581,7 @@ function rebuileUI() {
   buildRegelungenListe();
 
   // Zähler + Titel
-  document.getElementById("app-title").textContent = ORG_NAME;
-  document.getElementById("org-name").textContent  = ORG_NAME;
+  _zeigeOrgName();
 
   // Startseiten der Tabs befüllen
   _befuelleTabStartseiten();
@@ -4868,7 +4895,44 @@ document.addEventListener("click", e => {
   if (btn) ladeAdminDashboard();
 });
 
+// ── Organisation bearbeiten (PLAN-2026-10-01, Schritt 3) ─────────────────
+function _fuelleOrgForm() {
+  const f = document.getElementById("org-form");
+  if (!f) return;
+  const o = CONFIG.organisation || {};
+  const ap = o.ansprechpartner || {};
+  for (const feld of ["name","kurzname","rechtsform","rechtsgrundlage","gemeindeschluessel","bundesland","kreis"]) {
+    f.elements[feld].value = o[feld] || "";
+  }
+  f.elements.ap_name.value  = ap.name  || "";
+  f.elements.ap_email.value = ap.email || "";
+}
+
+document.getElementById("org-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const body = {};
+  for (const feld of ["name","kurzname","rechtsform","rechtsgrundlage","gemeindeschluessel","bundesland","kreis"]) {
+    body[feld] = f.elements[feld].value;
+  }
+  body.ansprechpartner = { name: f.elements.ap_name.value, email: f.elements.ap_email.value };
+  try {
+    const r = await fetch("api/config/organisation", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) throw new Error(`Server: ${r.status} ${await r.text()}`);
+    await ladeServerConfig();
+    _fuelleOrgForm();
+    zeigeToast("Organisation gespeichert", "ok");
+  } catch (err) {
+    zeigeToast(`Speichern fehlgeschlagen: ${err.message}`, "err", 6000);
+  }
+});
+
 async function ladeAdminDashboard() {
+  _fuelleOrgForm();
   if (_adminDatenGeladen) return;  // Bereits geladen
   try {
     const r = await fetch(`api/config/dashboard?t=${Date.now()}`, { cache: "no-store" });

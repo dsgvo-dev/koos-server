@@ -6,12 +6,23 @@ optional beim ersten Start und kann nachträglich initialisiert werden.
 """
 from __future__ import annotations
 import logging
+import os
 import subprocess
 from pathlib import Path
 
 from config import DATA_DIR, GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL
 
 log = logging.getLogger("koos.git")
+
+# Committer-Identität (PLAN-2026-10-01, Schritt 2a). `--author` setzt nur den
+# Autor. Ohne Committer bricht `git commit` in einer Umgebung ohne Git-
+# Konfiguration ab ("Committer identity unknown") — so im Container. Committer
+# ist derselbe neutrale Eintrag wie der Autor (ADR-016 E4: kein Klarname).
+_GIT_ENV = {
+    **os.environ,
+    "GIT_COMMITTER_NAME": GIT_AUTHOR_NAME,
+    "GIT_COMMITTER_EMAIL": GIT_AUTHOR_EMAIL,
+}
 
 
 def _run(args: list[str], cwd: Path) -> subprocess.CompletedProcess:
@@ -21,6 +32,7 @@ def _run(args: list[str], cwd: Path) -> subprocess.CompletedProcess:
         capture_output=True,
         text=True,
         encoding="utf-8",
+        env=_GIT_ENV,
     )
 
 

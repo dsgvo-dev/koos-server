@@ -2,16 +2,22 @@
 KOOS Server – Router: Konfiguration
 GET  /api/config           → Konfiguration aus koos.yaml: Organisation,
                              kontrolliertes Vokabular (ohne Passwort-Hashes)
+PUT  /api/config/organisation → Block `organisation` in koos.yaml ändern (nur dieser Block)
 GET  /api/config/dashboard → Kombinierten Stats-Überblick für das Admin-Dashboard
 """
 from __future__ import annotations
 from collections import Counter
+import io
+import re
+from typing import Optional
+
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 from fastapi.responses import JSONResponse
 import yaml
 
 import config
-from services import parser
+from services import parser, git_service
 
 router = APIRouter(prefix="/api/config", tags=["Konfiguration"])
 
@@ -57,6 +63,96 @@ def get_config() -> dict:
             },
         },
     }
+
+
+# ── Organisation ändern (PLAN-2026-10-01, Schritt 2) ────────────────────────
+# Geschrieben wird ausschließlich der Block `organisation:`. Der übrige Inhalt
+# von koos.yaml — Kommentare, Vokabular, Formular-Schema — bleibt byteidentisch:
+# der Block wird ausgeschnitten, mit ruamel.yaml (Round-Trip, Kommentare
+# bleiben) geändert und an derselben Stelle wieder eingesetzt.
+_ORG_FELDER = ("name", "kurzname", "rechtsform", "rechtsgrundlage",
+               "gemeindeschluessel", "bundesland", "kreis")
+
+
+class Ansprechpartner(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+
+
+class Organisation(BaseModel):
+    name: Optional[str] = None
+    kurzname: Optional[str] = None
+    rechtsform: Optional[str] = None
+    rechtsgrundlage: Optional[str] = None
+    gemeindeschluessel: Optional[str] = None
+    bundesland: Optional[str] = None
+    kreis: Optional[str] = None
+    ansprechpartner: Optional[Ansprechpartner] = None
+
+
+def _org_block_grenzen(zeilen: list[str]) -> tuple[int, int]:
+    """Erste und letzte+1 Zeile des Blocks `organisation:` (ohne nachfolgende
+    Leerzeilen)."""
+    start = next((i for i, z in enumerate(zeilen) if z.rstrip() == "organisation:"), None)
+    if start is None:
+        raise HTTPException(422, detail="Block 'organisation:' in koos.yaml nicht gefunden")
+    ende = len(zeilen)
+    for i in range(start + 1, len(zeilen)):
+        z = zeilen[i]
+        if z.strip() and not z[0].isspace():
+            ende = i
+            break
+    while ende > start + 1 and not zeilen[ende - 1].strip():
+        ende -= 1
+    return start, ende
+
+
+@router.put("/organisation", summary="Organisation in koos.yaml ändern")
+def put_organisation(org: Organisation) -> dict:
+    datei = config.DATA_DIR / "koos.yaml"
+    if not datei.exists():
+        raise HTTPException(404, detail="koos.yaml nicht gefunden")
+    if org.gemeindeschluessel and not re.fullmatch(r"\d{8}", org.gemeindeschluessel):
+        raise HTTPException(422, detail="Gemeindeschlüssel: genau 8 Ziffern")
+    if org.ansprechpartner and org.ansprechpartner.email and "@" not in org.ansprechpartner.email:
+        raise HTTPException(422, detail="E-Mail-Adresse ungültig")
+    try:
+        from ruamel.yaml import YAML
+    except ImportError:
+        raise HTTPException(500, detail="ruamel.yaml fehlt — Schreiben ohne Kommentarverlust nicht möglich")
+
+    text = datei.read_text(encoding="utf-8")
+    zeilen = text.splitlines(keepends=True)
+    start, ende = _org_block_grenzen(zeilen)
+    y = YAML()
+    y.preserve_quotes = True
+    y.width = 4096
+    y.indent(mapping=2, sequence=4, offset=2)
+    block = y.load("".join(zeilen[start:ende]))
+    o = block["organisation"]
+    for feld in _ORG_FELDER:
+        wert = getattr(org, feld)
+        if wert is not None:
+            o[feld] = wert.strip()
+    if org.ansprechpartner is not None:
+        ap = o.get("ansprechpartner")
+        if ap is None:
+            o["ansprechpartner"] = ap = {}
+        for feld in ("name", "email"):
+            wert = getattr(org.ansprechpartner, feld)
+            if wert is not None:
+                ap[feld] = wert.strip()
+    puffer = io.StringIO()
+    y.dump(block, puffer)
+    neu = puffer.getvalue()
+    if not neu.endswith("\n"):
+        neu += "\n"
+    neuer_text = "".join(zeilen[:start]) + neu + "".join(zeilen[ende:])
+    if neuer_text == text:
+        return {"ok": True, "gespeichert": False, "organisation": get_config()["organisation"]}
+    datei.write_text(neuer_text, encoding="utf-8")
+    git_service.commit([datei], "Organisation geändert")
+    return {"ok": True, "gespeichert": True, "organisation": get_config()["organisation"]}
 
 
 @router.get("/dashboard", summary="Kombinierten Stats-Überblick für Admin-Dashboard")
