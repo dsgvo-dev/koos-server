@@ -7,10 +7,10 @@ Prozesse, Datenarten, Regelungen) als MCP-Tools für den Agenten
 bereit. Parallel zum bestehenden KOOS-FastAPI-Server.
 
 Start (stdio — für Hermes Agent):
-    python3 koos_mcp.py --mandant gemeinde-musterstadt
+    python3 koos_mcp.py --mandant musterkommune
 
 Start (Streamable-HTTP — für nginx/OpenWebUI/Copilot, Umsetzungsplan Schritt 4):
-    python3 koos_mcp.py --mandant gemeinde-musterstadt --transport streamable-http
+    python3 koos_mcp.py --mandant musterkommune --transport streamable-http
     # oder per Container-Env: MCP_TRANSPORT=streamable-http
 
 Datenquelle: KOOS_DATA_DIR oder _input/koos-daten/<mandant>/
@@ -823,7 +823,7 @@ async def main():
     parser = argparse.ArgumentParser(description="KOOS-MCP-Server")
     parser.add_argument(
         "--mandant", default=KOOS_MANDANT,
-        help="Mandanten-Name (z. B. gemeinde-musterstadt)"
+        help="Mandanten-Name (z. B. musterkommune)"
     )
     parser.add_argument(
         "--data-dir", default=KOOS_DATA_DIR,

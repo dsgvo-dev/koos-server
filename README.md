@@ -172,9 +172,9 @@ Die Datei `koos.yaml` im Datenordner ist die zentrale Steuerdatei der KOOS-Insta
 
 ```yaml
 organisation:
-  id: gemeinde-musterstadt
-  name: Gemeindeverwaltung Musterstadt
-  kurzname: Musterstadt
+  id: musterkommune
+  name: Musterkommune
+  kurzname: Musterkommune
   rechtsform: Gemeinde
   rechtsgrundlage: NKomVG §10
   gemeindeschluessel: "03000000"
@@ -182,7 +182,7 @@ organisation:
   ansprechpartner:
     name: Stabsstelle Organisation und Digitalisierung
     oe-id: oe-stabsstelle
-    email: organisation@musterstadt.de
+    email: organisation@musterkommune.example
 ```
 
 ### Nutzer und Passwörter
