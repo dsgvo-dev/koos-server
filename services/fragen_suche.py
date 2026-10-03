@@ -10,6 +10,7 @@ Datenspeicher und Regelungen — ohne Sprachmodell.
      mindestens ein Treffer in Titel/Name oder ID nötig;
      Bonus, wenn alle Suchwörter getroffen sind
   4. Je Art nur Treffer ab der Hälfte des besten Punktwerts
+  5. Nur Prozesse mit Status „aktiv“ (ersetzte erscheinen über ihren Nachfolger)
 
 Wird vom Endpunkt GET /api/fragen und vom KI-Modus (_lade_kontext) genutzt.
 """
@@ -121,6 +122,9 @@ def suche(frage: str, n_prozesse: int = 5, n_daten: int = 5, n_regelungen: int =
     # Prozesse
     kandidaten = []
     for p in parser.lade_alle_prozesse(config.PROZESSE_DIR):
+        # ersetzte und inaktive Prozesse nicht anzeigen — der Nachfolger erscheint selbst
+        if p.get("status", "aktiv") != "aktiv":
+            continue
         schritte = p.get("schritte") or []
         ids = _ds_ids(p)
         felder = [
@@ -130,8 +134,6 @@ def suche(frage: str, n_prozesse: int = 5, n_daten: int = 5, n_regelungen: int =
             (" ".join(ds_name.get(i, i) for i in ids).lower(), 1),
         ]
         punkte = _bewerte(stämme, felder)
-        if p.get("status", "aktiv") == "aktiv" and punkte:
-            punkte += 0.5
         kandidaten.append((punkte, {
             "id": p["id"],
             "titel": p.get("titel", p["id"]),

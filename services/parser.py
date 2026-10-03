@@ -886,7 +886,10 @@ def lade_alle_vvt(vvt_dir: Path) -> list[dict]:
         return ergebnisse
     for datei in vvt_dir.glob("*.md"):
         text = datei.read_text(encoding="utf-8")
-        ergebnisse.append(parse_vvt_md(datei.stem, text))
+        try:
+            ergebnisse.append(parse_vvt_md(datei.stem, text))
+        except Exception as e:  # eine fehlerhafte Datei darf die Liste nicht abbrechen
+            log.warning("%s übersprungen: %s", datei.name, e)
     ergebnisse.sort(key=lambda v: v["uid"])
     _cache_set(key, ergebnisse)
     return ergebnisse
@@ -1138,7 +1141,10 @@ def lade_alle_prozesse(prozesse_dir: Path) -> list[dict]:
         return ergebnisse
     for datei in prozesse_dir.glob("*.md"):
         text = datei.read_text(encoding="utf-8")
-        ergebnisse.append(parse_prozess_md(datei.stem, text))
+        try:
+            ergebnisse.append(parse_prozess_md(datei.stem, text))
+        except Exception as e:  # eine fehlerhafte Datei darf die Liste nicht abbrechen
+            log.warning("%s übersprungen: %s", datei.name, e)
     ergebnisse.sort(key=lambda p: p["titel"].lower())
     _cache_set(key, ergebnisse)
     return ergebnisse
@@ -1175,7 +1181,10 @@ def lade_alle_regelungen(regelungen_dir: Path) -> list[dict]:
         return ergebnisse
     for datei in regelungen_dir.glob("*.md"):
         text = datei.read_text(encoding="utf-8")
-        ergebnisse.append(parse_regelung_md(datei.stem, text))
+        try:
+            ergebnisse.append(parse_regelung_md(datei.stem, text))
+        except Exception as e:  # eine fehlerhafte Datei darf die Liste nicht abbrechen
+            log.warning("%s übersprungen: %s", datei.name, e)
     ergebnisse.sort(key=lambda r: r["name"].lower())
     _cache_set(key, ergebnisse)
     return ergebnisse
@@ -1192,7 +1201,10 @@ def lade_alle_daten(daten_dir: Path) -> list[dict]:
         return ergebnisse
     for datei in daten_dir.glob("*.md"):
         text = datei.read_text(encoding="utf-8")
-        ergebnisse.append(parse_daten_md(datei.stem, text))
+        try:
+            ergebnisse.append(parse_daten_md(datei.stem, text))
+        except Exception as e:  # eine fehlerhafte Datei darf die Liste nicht abbrechen
+            log.warning("%s übersprungen: %s", datei.name, e)
     ergebnisse.sort(key=lambda d: d["name"].lower())
     _cache_set(key, ergebnisse)
     return ergebnisse

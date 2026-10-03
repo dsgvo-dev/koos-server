@@ -3018,7 +3018,8 @@ function _frageAntwortHtml(e) {
       ${ds ? `<div class="fk-zust">Datenspeicher: ${ds}</div>` : ""}
     </div>`);
   }
-  if (e.daten.length)
+  // Datenspeicher einzeln nur, wenn kein Prozess gefunden wurde — sonst stehen sie in den Karten
+  if (e.daten.length && !e.prozesse.length)
     teile.push(`<div class="frage-weitere">Datenspeicher: ${e.daten.map(d => _link("daten", d.id, d.name)).join(", ")}</div>`);
   if (e.regelungen.length)
     teile.push(`<div class="frage-weitere">Regelungen: ${e.regelungen.map(r => _link("regelungen", r.id, r.name)).join(", ")}</div>`);
