@@ -928,7 +928,9 @@ async def main():
         # dsms_mcp.py: async-native uvicorn-API statt der synchronen
         # uvicorn.run()-Fassade, die dafuer gedacht ist, selbst die Loop zu
         # starten (Skript-Einstieg), nicht aus einer Coroutine heraus.
-        config = uvicorn.Config(app, host="0.0.0.0", port=args.port)
+        # MCP_HOST: im Container 0.0.0.0 (Standard), lokal am Mac 127.0.0.1 —
+        # sonst ist der Dienst im LAN erreichbar (Plan 2026-10-03 lokale MCP-Dienste)
+        config = uvicorn.Config(app, host=os.environ.get("MCP_HOST", "0.0.0.0"), port=args.port)
         await uvicorn.Server(config).serve()
     else:
         async with stdio_server() as (read_stream, write_stream):
