@@ -161,10 +161,16 @@ def _lade_kontext(frage: str) -> list[str]:
         )
 
     # 4. Allgemeine Suche wenn keine IDs aber Schlüsselwörter vorhanden
+    #    Treffer aus services/fragen_suche.py (dieselben wie GET /api/fragen)
     if not blöcke:
-        treffer_d = _suche_daten(frage)
-        treffer_p = _suche_prozesse(frage)
-        treffer_r = _suche_regelungen(frage)
+        from services import fragen_suche
+        ergebnis = fragen_suche.suche(frage)
+        alle_d = {d["id"]: d for d in parser.lade_alle_daten(config.DATEN_DIR)}
+        alle_p = {p["id"]: p for p in parser.lade_alle_prozesse(config.PROZESSE_DIR)}
+        alle_r = {r["id"]: r for r in parser.lade_alle_regelungen(config.REGELUNGEN_DIR)}
+        treffer_d = [alle_d[t["id"]] for t in ergebnis["daten"] if t["id"] in alle_d]
+        treffer_p = [alle_p[t["id"]] for t in ergebnis["prozesse"] if t["id"] in alle_p]
+        treffer_r = [alle_r[t["id"]] for t in ergebnis["regelungen"] if t["id"] in alle_r]
         if treffer_d:
             zeilen = "\n".join(
                 f"  - {d['name']} "
@@ -241,65 +247,8 @@ def _ds_ids(proc: dict) -> list[str]:
     ]
 
 
-_STOPPWÖRTER = {
-    "wie", "wird", "eine", "einen", "einem", "eines", "ein", "der", "die", "das",
-    "den", "dem", "des", "und", "oder", "aber", "auch", "sich", "ist", "sind",
-    "was", "wer", "wann", "wo", "welche", "welcher", "welches", "welchen",
-    "kann", "muss", "soll", "darf", "wird", "werden", "wurde", "haben",
-    "beim", "beim", "für", "mit", "von", "aus", "nach", "über", "unter",
-    "bitte", "gibt", "gibt", "zuständig", "zuständige", "bearbeitet",
-}
+# Suche: services/fragen_suche.py (Plan 2026-10-02 „Fragen an KOOS ohne KI“)
 
-def _keywords(q: str) -> list[str]:
-    """Extrahiert bedeutsame Schlüsselwörter aus einer Frage."""
-    wörter = re.findall(r'[a-züöäß]{4,}', q.lower())
-    return [w for w in wörter if w not in _STOPPWÖRTER] or [q.lower()]
-
-
-def _suche_daten(q: str) -> list[dict]:
-    begriffe = _keywords(q)
-    return [
-        d for d in parser.lade_alle_daten(config.DATEN_DIR)
-        if any(
-            b in d.get("name", "").lower()
-            or b in d.get("id", "").lower()
-            or b in d.get("zustaendigeEinheit", "").lower()
-            for b in begriffe
-        )
-    ]
-
-
-def _suche_prozesse(q: str) -> list[dict]:
-    begriffe = _keywords(q)
-    return [
-        p for p in parser.lade_alle_prozesse(config.PROZESSE_DIR)
-        if any(
-            b in p.get("titel", "").lower()
-            or b in p.get("id", "").lower()
-            for b in begriffe
-        )
-    ]
-
-
-def _suche_regelungen(frage: str) -> list[dict]:
-    """Volltextsuche über Regelungen: Name, Typ, Body."""
-    q = frage.lower()
-    # Suche über mehrere Wörter: alle Treffer aus mind. einem Suchterm
-    begriffe = [w for w in q.split() if len(w) > 3]
-    if not begriffe:
-        begriffe = [q]
-    treffer = []
-    for r in parser.lade_alle_regelungen(config.REGELUNGEN_DIR):
-        text = " ".join([
-            r.get("name", ""), r.get("typ", ""),
-            r.get("body", "")
-        ]).lower()
-        if any(b in text for b in begriffe):
-            treffer.append(r)
-    return treffer
-
-
-# ── Ollama-Aufruf ─────────────────────────────────────────────────────────────
 
 def stream_ollama(frage: str, verlauf: list[dict] | None = None, modell: str | None = None):
     """

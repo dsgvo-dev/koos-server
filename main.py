@@ -8,14 +8,14 @@ import logging
 import sys
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 import config
 from routers import orga, prozesse, daten, regelungen, stats, llm, chat, koos_config, vvt, tom, kette, admin
-from services import git_service
+from services import git_service, fragen_suche
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -136,6 +136,16 @@ def get_ich(request: Request) -> dict:
         "rolle":      "superadmin" if name else None,
         "modus":      "proxy",
     }
+
+
+@app.get("/api/fragen", tags=["KI-Assistent"], summary="Frage ohne KI beantworten")
+def get_fragen(q: str = Query(..., min_length=2, max_length=500)) -> dict:
+    """
+    Plan 2026-10-02 „Fragen an KOOS ohne KI“: liefert zu einer Frage die
+    passenden Prozesse (mit Schritten, Zuständigkeit, Datenspeichern),
+    Datenspeicher und Regelungen. Nur lesend.
+    """
+    return fragen_suche.suche(q)
 
 
 # ── API-Router ────────────────────────────────────────────────────────────────

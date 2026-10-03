@@ -316,6 +316,13 @@
     .ai-error   { background: #fdecea; color: #c0392b; }
     .ai-system  { background: #eaf4ea; color: #2e7d32; font-size: 11px; }
     .msg-hint { align-self: center; font-size: 11px; color: #ccc; font-style: italic; }
+    .frage-karte { border-top: 1px solid #ddd; padding-top: 6px; margin-top: 6px; }
+    .frage-karte:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+    .frage-karte .fk-titel { font-weight: 700; }
+    .frage-karte .fk-zust { font-size: 11px; color: #666; margin: 2px 0 4px; }
+    .frage-karte ol { margin: 2px 0 4px 18px; padding: 0; }
+    .frage-weitere { margin-top: 8px; font-size: 12px; }
+    #chat-messages a[data-tab] { color: inherit; text-decoration: underline; cursor: pointer; }
     #chat-model-bar {
       padding: 6px 12px; border-top: 1px solid #eee; background: #fafafa;
       display: flex; align-items: center; gap: 6px;
@@ -1210,6 +1217,8 @@
     body.dark .msg-ai pre { background: #333; }
     body.dark .msg-user { background: #e0e0e0; color: #111; }
     body.dark .msg-hint { color: #555; }
+    body.dark .frage-karte { border-color: #444; }
+    body.dark .frage-karte .fk-zust { color: #999; }
     body.dark .ai-loading { color: #666; }
     body.dark #chat-model-bar { background: #1e1e1e; border-color: #333; }
     body.dark #chat-model-label { color: #666; }
@@ -1519,10 +1528,10 @@
   <div id="assistant">
     <div id="assistant-header">
       <span id="assistant-header-dot" aria-hidden="true"></span>
-      KI-Assistent
+      <span id="assistant-titel">KI-Assistent</span>
     </div>
     <div id="chat-messages" aria-live="polite">
-      <span class="msg-hint">Stelle eine Frage zur Organisation.</span>
+      <span class="msg-hint" id="chat-hint">Stelle eine Frage zur Organisation.</span>
     </div>
     <div id="chat-model-bar">
       <span id="chat-model-label">Modell</span>
@@ -2979,9 +2988,76 @@ function addMsg(text, type) {
   return el;
 }
 
+// Modus: "ki" (Ollama erreichbar) oder "suche" (ohne KI, GET api/fragen)
+// Plan 2026-10-02 „Fragen an KOOS ohne KI“
+let _chatModus = "ki";
+
+function _aktiviereSuchmodus() {
+  _chatModus = "suche";
+  document.getElementById("assistant-titel").textContent = "Fragen an KOOS";
+  document.getElementById("chat-model-bar").style.display = "none";
+  document.getElementById("chat-hint").textContent =
+    "Fragen Sie nach Prozessen, Datenspeichern oder Regelungen, z. B. „Gibt es den Prozess Hundesteuer?“";
+  chatInput.setAttribute("aria-label", "Frage an KOOS");
+}
+
+function _link(tab, id, text) {
+  return `<a href="#" data-tab="${esc(tab)}" data-id="${esc(id)}">${esc(text)}</a>`;
+}
+
+function _frageAntwortHtml(e) {
+  const teile = [];
+  for (const p of e.prozesse) {
+    const schritte = (p.schritte || []).map(s =>
+      `<li>${esc(s.name)}${s.beschreibung ? ` — ${esc(s.beschreibung)}` : ""}</li>`).join("");
+    const ds = (p.datenspeicher || []).map(d => _link("daten", d.id, d.name)).join(", ");
+    teile.push(`<div class="frage-karte">
+      <div class="fk-titel">${_link("prozesse", p.id, p.titel)}</div>
+      <div class="fk-zust">Zuständig: ${esc(p.zustaendig || "nicht zugeordnet")}${p.status && p.status !== "aktiv" ? ` · Status: ${esc(p.status)}` : ""}</div>
+      ${schritte ? `<ol>${schritte}</ol>` : `<div class="fk-zust">Keine Prozessschritte erfasst.</div>`}
+      ${ds ? `<div class="fk-zust">Datenspeicher: ${ds}</div>` : ""}
+    </div>`);
+  }
+  if (e.daten.length)
+    teile.push(`<div class="frage-weitere">Datenspeicher: ${e.daten.map(d => _link("daten", d.id, d.name)).join(", ")}</div>`);
+  if (e.regelungen.length)
+    teile.push(`<div class="frage-weitere">Regelungen: ${e.regelungen.map(r => _link("regelungen", r.id, r.name)).join(", ")}</div>`);
+  if (!teile.length)
+    return "Nichts gefunden. Versuchen Sie ein einzelnes Stichwort, z. B. „Hundesteuer“.";
+  return teile.join("");
+}
+
+async function _frageOhneKI(text) {
+  addMsg(text, "user");
+  chatInput.value = "";
+  chatInput.style.height = "auto";
+  chatSend.disabled = true;
+  const el = addMsg("", "ai");
+  try {
+    const resp = await fetch(`api/fragen?q=${encodeURIComponent(text)}`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    el.innerHTML = _frageAntwortHtml(await resp.json());
+  } catch (err) {
+    el.textContent = `Fehler: ${err.message}`;
+    el.classList.add("ai-error");
+  } finally {
+    chatSend.disabled = false;
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    chatInput.focus();
+  }
+}
+
+chatMessages.addEventListener("click", e => {
+  const a = e.target.closest("a[data-tab]");
+  if (!a) return;
+  e.preventDefault();
+  navigateToItem(a.dataset.tab, a.dataset.id);
+});
+
 async function sendMessage() {
   const text = chatInput.value.trim();
   if (!text) return;
+  if (_chatModus === "suche") return _frageOhneKI(text);
 
   addMsg(text, "user");
   chatVerlauf.push({ role: "user", content: text });
@@ -3052,8 +3128,7 @@ let _aktivesOllamaModell = "";
     const data = await resp.json();
 
     if (!data.verfuegbar) {
-      addMsg("KI-Assistent: Ollama nicht erreichbar. Bitte starten: ollama serve", "ai ai-error");
-      chatModelSelect.innerHTML = `<option value="">Ollama nicht erreichbar</option>`;
+      _aktiviereSuchmodus();
     } else {
       _aktivesOllamaModell = data.aktiv || "";
       // Dropdown befüllen — Cloud-Modelle ausfiltern, aktives Modell vorauswählen
@@ -3065,7 +3140,7 @@ let _aktivesOllamaModell = "";
       _aktualisiereModellHint();
     }
   } catch {
-    chatModelSelect.innerHTML = `<option value="">Server nicht erreichbar</option>`;
+    _aktiviereSuchmodus();
   }
 })();
 
