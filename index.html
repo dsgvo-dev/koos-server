@@ -33,12 +33,6 @@
       overflow: hidden;
     }
 
-    /* ── VVT-Detail ──────────────────────────────────── */
-    .vvt-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
-    .vvt-feld { display: flex; flex-direction: column; gap: 2px; }
-    .vvt-feld.vvt-vollbreit { grid-column: 1 / -1; }
-    .vvt-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: .5px; }
-
     /* ── Globaler Fokusring (WCAG) ───────────────────── */
     :focus-visible {
       outline: 3px solid #005fcc;
@@ -1305,7 +1299,6 @@
       <button class="tab"        data-tab="prozesse"   role="tab" aria-selected="false" aria-controls="panel-prozesse">Prozesse</button>
       <button class="tab"        data-tab="daten"      role="tab" aria-selected="false" aria-controls="panel-daten">Daten</button>
       <button class="tab"        data-tab="regelungen" role="tab" aria-selected="false" aria-controls="panel-regelungen">Regelungen</button>
-      <button class="tab"        data-tab="vvt"        role="tab" aria-selected="false" aria-controls="panel-vvt">VVT</button>
       <button class="tab" id="tab-admin" data-tab="admin" role="tab" aria-selected="false" aria-controls="panel-admin">⚙ Admin</button>
     </nav>
   </div>
@@ -1454,22 +1447,6 @@
           <div class="tab-start" id="reg-start-content">
             <!-- wird per JS befüllt -->
           </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Panel: VVT -->
-    <div id="panel-vvt" class="panel" role="tabpanel" aria-labelledby="tab-vvt">
-      <div class="list-sidebar">
-        <div class="list-sidebar-header">
-          <div><p>VVT-Einträge</p><span id="vvt-count"></span></div>
-        </div>
-        <div class="list-scroll" id="vvt-list"></div>
-      </div>
-      <div class="list-detail" id="vvt-detail" role="region" aria-label="Detailansicht VVT">
-        <div id="vvt-detail-content"></div>
-        <div class="list-detail-empty" id="vvt-empty">
-          <div class="tab-start">VVT-Eintrag auswählen</div>
         </div>
       </div>
     </div>
@@ -2979,75 +2956,6 @@ function buildRegelungenListe() {
     regItems.set(r.id, { r, item });
   });
 }
-
-// ═══════════════════════════════════════════════════════════════════════════
-//  VVT — Liste + Detail mit abgeleitetem Bereich (06.10.2026)
-// ═══════════════════════════════════════════════════════════════════════════
-
-let VVTS = [];
-const VVT_BEREICH_CACHE = {};
-
-async function ladeVVTs() {
-  const resp = await fetch("/api/vvt");
-  VVTS = await resp.json();
-  document.getElementById("vvt-count").textContent = VVTS.length;
-  renderVvtListe();
-}
-
-function renderVvtListe() {
-  const list = document.getElementById("vvt-list");
-  list.innerHTML = "";
-  VVTS.forEach(v => {
-    const item = document.createElement("div");
-    item.className = "list-item";
-    item.innerHTML = `<span class="li-titel">${esc(v.titel || v.id)}</span>
-      <span class="li-oe">${esc(v.organisationseinheit || "")}</span>`;
-    item.addEventListener("click", () => zeigeVvtDetail(v));
-    list.appendChild(item);
-  });
-}
-
-async function zeigeVvtDetail(v) {
-  const content = document.getElementById("vvt-detail-content");
-  document.getElementById("vvt-empty").style.display = "none";
-  content.style.display = "";
-
-  // Bereich ableiten (API-Call mit Cache)
-  let bereichAnzeige = "…";
-  if (VVT_BEREICH_CACHE[v.id] !== undefined) {
-    bereichAnzeige = VVT_BEREICH_CACHE[v.id];
-  } else {
-    try {
-      const resp = await fetch(`/api/vvt/${v.id}/bereich`);
-      const b = await resp.json();
-      VVT_BEREICH_CACHE[v.id] = b.anzeige || "—";
-      bereichAnzeige = VVT_BEREICH_CACHE[v.id];
-    } catch(e) {
-      bereichAnzeige = "Fehler";
-    }
-  }
-
-  const prozesse = (v.prozesse || []).map(p => esc(typeof p === "object" ? p.id : p)).join(", ") || "—";
-
-  content.innerHTML = `<h2>${esc(v.titel || v.id)}</h2>
-    <div class="vvt-detail-grid">
-      <div class="vvt-feld"><span class="vvt-label">ID</span><span>${esc(v.id)}</span></div>
-      <div class="vvt-feld"><span class="vvt-label">UID</span><span>${esc(v.uid || "—")}</span></div>
-      <div class="vvt-feld"><span class="vvt-label">Status</span><span>${esc(v.status || "aktiv")}</span></div>
-      <div class="vvt-feld"><span class="vvt-label">OE</span><span>${esc(v.organisationseinheit || "—")}</span></div>
-      <div class="vvt-feld"><span class="vvt-label">Bereich</span><span><strong>${esc(bereichAnzeige)}</strong></span></div>
-      <div class="vvt-feld"><span class="vvt-label">Prozesse</span><span>${prozesse}</span></div>
-      <div class="vvt-feld vvt-vollbreit"><span class="vvt-label">Zweck</span><span>${esc(v.zweck || "—")}</span></div>
-      <div class="vvt-feld vvt-vollbreit"><span class="vvt-label">Rechtsgrundlage</span><span>${esc(v.rechtsgrundlage || "—")}</span></div>
-    </div>`;
-}
-
-// VVT-Tab: Daten beim ersten Öffnen laden
-const _origSwitchToTab = switchToTab;
-switchToTab = function(tabId) {
-  _origSwitchToTab(tabId);
-  if (tabId === "vvt" && VVTS.length === 0) ladeVVTs();
-};
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  KI-ASSISTENT

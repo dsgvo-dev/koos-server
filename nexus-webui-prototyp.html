@@ -1029,6 +1029,7 @@ function ausApi(x){
     OE:(x.orga||[]).map(o=>({id:o.id,name:o.name,parent:o.parent??null,
         rollen:o.rollen||[],sonder:o.sonderfunktionen||[],hinweis:o.hinweis||null})),
     PROZESSE:(x.proz||[]).map(p=>({id:p.id,name:feld(p,'titel','name'),oe:feld(p,'zustaendigeEinheit','oe'),
+        bereich:p.bereich||null,
         beteiligte:(p.beteiligte||[]).map(b=>b&&b.einheit||b).filter(Boolean),
         leika:p.leika_id??null, ozg:p.ozg_id??null, status:p.status||null,
         dstores:idListe((p.daten||{}).datenspeicher), regelungen:p.regelungen||[],
@@ -1058,6 +1059,7 @@ function ausApi(x){
         such=`${d.name} ${(d.tags||[]).join(' ')}`,
         art9re=/gesundheit|biometr|religio|sozialdat|fingerabdruck|strafe?|sexual|gewerkschaft|ethni|genetisch|weltanschau/i;
       return {id:d.id,name:d.name,
+        bereich:d.bereich||null,
         schutz:f('schutzstufe'), bedarf:f('schutzbedarf'),
         vertraul:kl.vertraulichkeitsklasse ?? kl.vertraulichkeit ?? d.vertraulichkeit,
         bsiV:f('bsi-vertraulichkeit'), bsiI:f('bsi-integritaet') ?? kl.integritaet,
@@ -1249,6 +1251,12 @@ function schutzstufe(vt){
   return stufen.sort().reverse()[0];
 }
 function hatArt9(vt){ return (vt.dstores||[]).some(id=>(dsById(id)||{}).art9); }
+
+/* Bereich einer VVT aus ihren Prozessen ableiten (P3-Logik, 06.10.2026) */
+function vvtBereich(vt){
+  const b=new Set((vt.prozesse||[]).map(id=>(procById(id)||{}).bereich).filter(Boolean));
+  return b.size===0?null : b.size===1?[...b][0] : 'gemischt';
+}
 
 /* Listenfilter: Suchbegriff + Kappung für lange Listen */
 function filtern(modul, arr, textF){
@@ -1621,7 +1629,7 @@ function mProzesse(){
   <div class="detail">
     ${!p?'<div class="leer-hinweis">Prozess auswählen</div>':`
     <h2>${esc(p.name)}</h2>
-    <div class="detail-id">${p.id}${p.status?' · '+esc(p.status):''}</div>
+    <div class="detail-id">${p.id}${p.status?' · '+esc(p.status):''}${p.bereich?' · '+esc(p.bereich):''}</div>
     <div class="aktionsleiste" style="margin:0 0 22px;padding:0;border:none">
       <button class="btn klein" data-setkontext="prozess:${p.id}">Als Kontext setzen</button>
       <button class="btn klein" data-frage="Ist der Prozess ${p.name.replace(/"/g,'')} im VVT abgebildet?">Assistent fragen</button>
@@ -1696,7 +1704,7 @@ function mDatenspeicher(){
   <div class="detail">
     ${!d?'<div class="leer-hinweis">Datenart auswählen</div>':`
     <h2>${esc(d.name)}</h2>
-    <div class="detail-id">${d.id}</div>
+    <div class="detail-id">${d.id}${d.bereich?' · '+esc(d.bereich):''}</div>
     <div class="hinweis">Die Schutzstufe wird gemäß <b>Richtlinie zur Datenklassifizierung</b> (Punkt 4.2)
       ausschließlich hier am Datenspeicher geführt. Verarbeitungstätigkeiten leiten sie nach dem
       Maximumprinzip ab.</div>
@@ -1790,7 +1798,7 @@ function mVVT(){
   <div class="detail">
     ${!v?'<div class="leer-hinweis">Verarbeitungstätigkeit auswählen — die Auswahl gilt anschließend in allen Datenschutzmodulen</div>':`
     <h2>${esc(v.titel)}</h2>
-    <div class="detail-id">${v.id} · UID ${esc(v.uid)} · ${esc(oeName(v.oe))} · Status ${esc(v.status||'—')}${v.stand?' · Stand '+esc(v.stand):''}</div>
+    <div class="detail-id">${v.id} · UID ${esc(v.uid)} · ${esc(oeName(v.oe))} · Status ${esc(v.status||'—')} · Bereich ${vvtBereich(v)||'—'}${v.stand?' · Stand '+esc(v.stand):''}</div>
     <div class="aktionsleiste" style="margin:0 0 20px;padding:0;border:none">
       <button class="btn klein primary" data-go="besonderheiten:">Kette fortsetzen →</button>
       <button class="btn klein" data-frage="Ist die Rechtsgrundlage für ${v.titel.replace(/"/g,'')} tragfähig?">Rechtsgrundlage prüfen lassen</button>
