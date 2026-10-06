@@ -33,6 +33,21 @@ _ID_RE = re.compile(r"^[a-z0-9][a-z0-9\-]{0,126}$")
 _SECTION_VALUES = {"frontmatter", "body", "all"}
 
 
+def _ids_aus_liste(liste: list | None) -> list[str]:
+    """Normalisiert {id: x}-Dicts oder Strings zu ID-Strings."""
+    if not liste:
+        return []
+    ergebnis = []
+    for eintrag in liste:
+        if isinstance(eintrag, dict):
+            eid = eintrag.get("id", "")
+            if eid:
+                ergebnis.append(eid)
+        elif isinstance(eintrag, str) and eintrag:
+            ergebnis.append(eintrag)
+    return ergebnis
+
+
 def _datei(vvt_id: str) -> Path:
     if not _ID_RE.match(vvt_id):
         raise HTTPException(400, detail="Ungültige VVT-ID")
@@ -108,6 +123,29 @@ def get_schutzstufe(vvt_id: str) -> dict:
     meta = parser.parse_vvt_md(vvt_id, datei.read_text(encoding="utf-8"))
     alle_daten = parser.lade_alle_daten(config.DATEN_DIR)
     return {"id": vvt_id, **parser.leite_schutzstufe_ab(meta, alle_daten)}
+
+
+@router.get("/{vvt_id}/bereich", summary="Abgeleiteter Bereich aus verknüpften Prozessen (06.10.2026)")
+def get_bereich(vvt_id: str) -> dict:
+    datei = _datei(vvt_id)
+    if not datei.exists():
+        raise HTTPException(404, detail=f"VVT-Eintrag '{vvt_id}' nicht gefunden")
+    meta = parser.parse_vvt_md(vvt_id, datei.read_text(encoding="utf-8"))
+    alle_prozesse = parser.lade_alle_prozesse(config.PROZESSE_DIR)
+    pids = _ids_aus_liste(meta.get("prozesse"))
+    if not pids:
+        return {"id": vvt_id, "bereich": "", "anzeige": "—"}
+    bereiche = set()
+    for pid in pids:
+        p = next((p for p in alle_prozesse if p.get("id") == pid), None)
+        if p and p.get("bereich"):
+            bereiche.add(p.get("bereich"))
+    if not bereiche:
+        return {"id": vvt_id, "bereich": "", "anzeige": "—"}
+    if len(bereiche) == 1:
+        b = list(bereiche)[0]
+        return {"id": vvt_id, "bereich": b, "anzeige": b}
+    return {"id": vvt_id, "bereich": "gemischt", "anzeige": "gemischt"}
 
 
 @router.get("/{vvt_id}/validierung", summary="Referenz-Validierung für einen VVT-Eintrag")
