@@ -1739,6 +1739,7 @@ const VOKABULAR = {
   schutzstufe:     ["A","B","C","D","E"],
   schutzbedarf:    ["normal","hoch","sehr hoch"],
   vertraulichkeit: ["öffentlich","intern","vertraulich","streng vertraulich"],
+  bereich:         ["intern", "extern"],
   // datenkategorie am 2026-08-15 entfallen (ADR 013)
   //
   // regelungStatus, regelungTyp und prozessStatus stehen hier NICHT mehr.
@@ -1769,6 +1770,7 @@ const FORMULAR_SCHEMA = {
     felder: [
       { id: "titel",              label: "Titel",                     typ: "text",           pflicht: true },
       { id: "status",             label: "Status",                    typ: "select",         vokabular: "prozessStatus", pflicht: true },
+      { id: "bereich",           label: "Bereich",                   typ: "select",         vokabular: "bereich",       pflicht: true, hinweis: "intern = Eigenverwaltung; extern = Verwaltungshandeln gegenüber Bürgern/Unternehmen" },
       { id: "zustaendigeEinheit", label: "Zuständige OE",             typ: "oe-select",      pflicht: true },
       { id: "zustaendigeRolle",   label: "Zuständige Rolle",          typ: "text",           hinweis: "Rolle aus der OE-Rollenliste (optional)" },
       { id: "beteiligte",         label: "Beteiligte Einheiten",      typ: "list-oe-aufgabe",hinweis: "OE und deren konkreter Beitrag zum Prozess. Ist keine OE benannt, trägt der Eintrag stattdessen eine Rolle und die Phasennummern" },
@@ -1785,6 +1787,7 @@ const FORMULAR_SCHEMA = {
     idPraefix:  "dtype-",
     felder: [
       { id: "name",               label: "Bezeichnung",               typ: "text",           pflicht: true },
+      { id: "bereich",           label: "Bereich",                   typ: "select",         vokabular: "bereich",       pflicht: true, hinweis: "intern = Eigenverwaltung; extern = Verwaltungshandeln gegenüber Bürgern/Unternehmen" },
       { id: "zustaendigeEinheit", label: "Zuständige OE",             typ: "oe-select",      pflicht: true },
       { id: "schutzstufe",        label: "Schutzstufe (Datenschutz)", typ: "select",         vokabular: "schutzstufe",    pflicht: true },
       { id: "schutzbedarf",       label: "Schutzbedarf (BSI)",        typ: "select",         vokabular: "schutzbedarf",   pflicht: true },
@@ -4103,6 +4106,16 @@ document.getElementById("form-speichern").addEventListener("click", async () => 
   if (beanstandungen.length) {
     zeigeToast("Nicht gespeichert — " + beanstandungen.join("; "), "err", 8000);
     return;
+  }
+
+  // P4: Bereich muss bei Prozess und Datenspeicher gesetzt sein (06.10.2026)
+  if (_formTyp === "prozess" || _formTyp === "daten") {
+    const bereichEl = document.getElementById("ff-bereich");
+    if (bereichEl && !bereichEl.value) {
+      zeigeToast("Bitte Bereich wählen (intern/extern)", "err", 5000);
+      bereichEl.focus();
+      return;
+    }
   }
 
   const daten      = formulardatenLesen();

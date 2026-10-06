@@ -261,7 +261,24 @@ class KoosLoader:
             # Formatter verschluckt).
             "tom": v.get("tom", []),
             "empfaenger": v.get("empfaenger"),
+            # abgeleiteter Bereich aus den Prozessen (06.10.2026, P3)
+            "bereich": self._vvt_bereich(v),
         }
+
+    def _vvt_bereich(self, v: dict[str, Any]) -> str:
+        """Leitet den Bereich einer VVT aus ihren Prozessen ab (P3-Logik)."""
+        pids = [x["id"] if isinstance(x, dict) else x
+                for x in (v.get("prozesse") or [])]
+        if not pids:
+            return ""
+        bereiche = set()
+        for pid in pids:
+            p = next((p for p in self.prozesse if p.get("id") == pid), None)
+            if p and p.get("bereich"):
+                bereiche.add(p["bereich"])
+        if not bereiche:
+            return ""
+        return list(bereiche)[0] if len(bereiche) == 1 else "gemischt"
 
     def _format_daten(self, d: dict[str, Any]) -> dict[str, Any]:
         # Aktuelles Schema führt Schutzstufe/-bedarf/Vertraulichkeit/
