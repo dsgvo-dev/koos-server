@@ -112,6 +112,7 @@ def _text_prozess(p: dict, vvt_map: dict[str, list[dict]]) -> str:
     teile = [
         p.get("titel", ""),
         p.get("zustaendigeRolle", "") or "",
+        p.get("bereich", "") or "",
         " ".join(str(x) for x in (daten_feld.get("input") or [])),
         " ".join(str(x) for x in (daten_feld.get("output") or [])),
         " ".join(str(x) for x in (p.get("regelungen") or [])),
@@ -179,6 +180,7 @@ def _text_dstore(d: dict, bausteine: set[str] | None = None) -> str:
     teile = [
         d.get("name", ""),
         # datenkategorie am 2026-08-15 entfallen (ADR 013)
+        d.get("bereich", "") or "",
         " ".join(str(t) for t in tags),
         # system nachgezogen 20.07.2026: Anfragen nach dem konkreten
         # IT-Fachverfahren (z. B. "OK.WOBIS") sollten die zugehörige

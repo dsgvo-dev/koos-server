@@ -380,6 +380,7 @@ def parse_prozess_md(dateiname: str, text: str) -> dict:
         "regelungen":  meta.get("regelungen", []),
         "leika_id":    meta.get("leika_id"),
         "ozg_id":      meta.get("ozg_id"),
+        "bereich":     meta.get("bereich", ""),
         "schritte":    schritte,
         "letzte_aktualisierung": meta.get("letzte-aktualisierung", ""),
     }
@@ -596,6 +597,11 @@ def prozess_to_md_merge(incoming: dict, existing_path: "Path | None" = None) -> 
             val = [b for b in val if b]
         if key == "letzte_aktualisierung":
             key = "letzte-aktualisierung"
+        if key == "bereich":
+            if val not in ("intern", "extern"):
+                raise ValueError(
+                    f"bereich muss 'intern' oder 'extern' sein, nicht {val!r}"
+                )
         _setze(orig_meta, key, val)
 
     # Body nur ersetzen, wenn das Formular ihn tatsächlich mitsendet.
@@ -679,6 +685,7 @@ def parse_daten_md(dateiname: str, text: str) -> dict:
         "bsi-schutzbedarf":    kl.get("bsi-schutzbedarf", ""),
         # Schlagworte: stehen im Frontmatter, wurden bisher nicht ausgeliefert.
         "tags":       meta.get("tags") or [],
+        "bereich":    meta.get("bereich", ""),
         "definition": "",
         "inhalte":    [],
     }
@@ -758,6 +765,15 @@ def daten_to_md_merge(incoming: dict, existing_path: "Path | None" = None) -> st
         val = incoming.get(field)
         if val is not None:
             _setze(orig_meta, field, val)
+
+    # bereich (neu 06.10.2026): validieren wie bei Prozessen
+    if "bereich" in incoming:
+        bv = incoming["bereich"]
+        if bv not in ("intern", "extern"):
+            raise ValueError(
+                f"bereich muss 'intern' oder 'extern' sein, nicht {bv!r}"
+            )
+        _setze(orig_meta, "bereich", bv)
 
     # zustaendigeEinheit (camelCase aus Parser) → zuständige-einheit im YAML
     if "zustaendigeEinheit" in incoming:

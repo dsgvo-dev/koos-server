@@ -224,6 +224,7 @@ class KoosLoader:
             "regelungen": p.get("regelungen", []),
             "leika_id": p.get("leika_id"),
             "ozg_id": p.get("ozg_id"),
+            "bereich": p.get("bereich", ""),
             "letzteAktualisierung": str(p.get("letzte-aktualisierung", "")),
         }
 
@@ -291,6 +292,7 @@ class KoosLoader:
             # unterschlagen, wodurch Antworten sicherer wirkten als die
             # zugrundeliegende Datenlage tatsächlich ist.
             "aufbewahrungHinweis": aufbewahrung.get("hinweis"),
+            "bereich": d.get("bereich", ""),
         }
 
     def by_id(self, typ: str, iid: str) -> dict[str, Any] | None:
@@ -312,7 +314,8 @@ class KoosLoader:
 
     def search_prozess(self, query: str = "",
                        oe_id: str | None = None,
-                       datenart_id: str | None = None) -> list[dict[str, Any]]:
+                       datenart_id: str | None = None,
+                       bereich: str | None = None) -> list[dict[str, Any]]:
         """Prozesse suchen."""
         results = []
         q = query.lower()
@@ -322,6 +325,8 @@ class KoosLoader:
             if q and q not in titel and q not in oid:
                 continue
             if oe_id and p.get("zustaendigeEinheit") != oe_id:
+                continue
+            if bereich and p.get("bereich", "") != bereich:
                 continue
             if datenart_id:
                 # Aktuelles Schema: daten.datenspeicher ist eine Liste von
@@ -351,7 +356,8 @@ class KoosLoader:
         return results
 
     def search_daten(self, query: str = "",
-                     schutzstufe: str | None = None) -> list[dict[str, Any]]:
+                     schutzstufe: str | None = None,
+                     bereich: str | None = None) -> list[dict[str, Any]]:
         """Datenarten suchen."""
         results = []
         q = query.lower()
@@ -363,6 +369,8 @@ class KoosLoader:
                 continue
             formatted = self._format_daten(d)
             if schutzstufe and formatted["schutzstufe"] != schutzstufe:
+                continue
+            if bereich and formatted["bereich"] != bereich:
                 continue
             results.append(formatted)
         return results
@@ -559,6 +567,10 @@ def _build_tools() -> list[Tool]:
                         "type": "string",
                         "description": "Filter: Prozesse mit bestimmter Datenart",
                     },
+                    "bereich": {
+                        "type": "string",
+                        "description": "Filter: intern | extern (neu 06.10.2026)",
+                    },
                 },
                 "required": ["query"],
             },
@@ -583,6 +595,10 @@ def _build_tools() -> list[Tool]:
                     "schutzstufe": {
                         "type": "string",
                         "description": "Filter: A/B/C/D/E",
+                    },
+                    "bereich": {
+                        "type": "string",
+                        "description": "Filter: intern | extern (neu 06.10.2026)",
                     },
                 },
                 "required": ["query"],
@@ -735,8 +751,9 @@ async def _handle_call_tool(ctx, params: CallToolRequestParams) -> CallToolResul
         query = arguments.get("query", "")
         oe_id = arguments.get("oe_id")
         datenart_id = arguments.get("datenart_id")
+        bereich = arguments.get("bereich")
         results = _loader.search_prozess(
-            query=query, oe_id=oe_id, datenart_id=datenart_id
+            query=query, oe_id=oe_id, datenart_id=datenart_id, bereich=bereich
         )
         results = _hybrid_erweitern(_loader, "proc", results, query)
         return CallToolResult(content=[TextContent(
@@ -747,7 +764,8 @@ async def _handle_call_tool(ctx, params: CallToolRequestParams) -> CallToolResul
     elif name == "koos_search_daten":
         query = arguments.get("query", "")
         schutzstufe = arguments.get("schutzstufe")
-        results = _loader.search_daten(query=query, schutzstufe=schutzstufe)
+        bereich = arguments.get("bereich")
+        results = _loader.search_daten(query=query, schutzstufe=schutzstufe, bereich=bereich)
         results = _hybrid_erweitern(_loader, "dstore", results, query)
         return CallToolResult(content=[TextContent(
             type="text",
