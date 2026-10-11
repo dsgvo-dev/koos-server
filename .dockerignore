@@ -3,5 +3,4 @@ __pycache__/
 *.pyc
 .git/
 .koos-embed/
-nexus-webui-prototyp.html
 adrs/

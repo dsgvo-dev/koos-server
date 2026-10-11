@@ -764,7 +764,7 @@ async function ketteVervollstaendigen(){
   if(!teil) return;
   _ketteHolt=v.id;
   try{
-    const r=await fetch(`/api/kette/${encodeURIComponent(v.id)}`,{cache:'no-store'});
+    const r=await fetch(`api/kette/${encodeURIComponent(v.id)}`,{cache:'no-store'});
     if(r.ok){
       const d=await r.json();
       for(const z of KETTE_ZWEIGE) if(d[z]) K[z][v.id]=d[z];
@@ -838,17 +838,17 @@ async function datenLaden(){
   /* 1) REST-API des Nexus-Servers */
   try{
     const [orga,proz,daten,reg,vvt,tom,thr,kette]=await Promise.all([
-      fetch('/api/orga',OPT).then(ok),
-      fetch('/api/prozesse',OPT).then(ok),
-      fetch('/api/daten',OPT).then(ok),
-      fetch('/api/regelungen',OPT).then(ok),
-      fetch('/api/vvt',OPT).then(ok),
-      fetch('/api/tom/definitionen',OPT).then(ok).catch(()=>[]),
-      fetch('/api/tom/bedrohungen',OPT).then(ok).catch(()=>[]),
+      fetch('api/orga',OPT).then(ok),
+      fetch('api/prozesse',OPT).then(ok),
+      fetch('api/daten',OPT).then(ok),
+      fetch('api/regelungen',OPT).then(ok),
+      fetch('api/vvt',OPT).then(ok),
+      fetch('api/tom/definitionen',OPT).then(ok).catch(()=>[]),
+      fetch('api/tom/bedrohungen',OPT).then(ok).catch(()=>[]),
       /* Die Datenschutzkette in einem Abruf statt in 1.615 Einzeldateien.
          Fehlt der Endpunkt, bleibt die Kette leer und die Stammdaten stehen
          trotzdem — die Oberfläche zeigt dann „keine Datei vorhanden“. */
-      fetch('/api/kette',OPT).then(ok).catch(()=>null),
+      fetch('api/kette',OPT).then(ok).catch(()=>null),
     ]);
     ketteAusUebersicht(kette);
     datenUebernehmen(ausApi({orga,proz,daten,reg,vvt,tom,thr}));
@@ -905,6 +905,12 @@ let _schrittIdx=[];
 /* Verzeichnislisting des einfachen HTTP-Servers auswerten und alle
    Markdown-Dateien einlesen. Mehr als tausend Einzelabrufe — deshalb
    gebündelt und mit Fortschrittsanzeige. */
+/* Die Ausweichwege (Quelldateien, Kataloge) und die Modellsuche auf
+   127.0.0.1/localhost gibt es nur lokal. Online (hinter /koos/<kunde>/)
+   liefert der Server diese Pfade nicht aus, und ein https-Browser blockiert
+   Abrufe an localhost ohnehin. (07.10.2026) */
+const NEXUS_LOKAL = location.protocol==='file:' ||
+  ['localhost','127.0.0.1','::1','[::1]'].includes(location.hostname);
 const DATEN_BASIS='/koos-knowledge/_daten';
 async function verzeichnis(pfad){
   const r=await fetch(pfad+'/',{cache:'no-store'});
@@ -937,6 +943,7 @@ async function gebuendelt(liste, fn, breite, melde){
    Ueber die REST-API kommen dieselben Daten aus /api/tom/*. */
 const KATALOG_BASIS='/dsms-knowledge/toms';
 async function kataloge(art){
+  if(!NEXUS_LOKAL) return [];
   const ordner = art==='tom' ? 'massnahmen' : 'gefaehrdungen';
   let namen;
   try{
@@ -994,6 +1001,7 @@ async function ketteLesen(){
 }
 
 async function quelldateienLesen(){
+  if(!NEXUS_LOKAL) return null;
   if(!window.jsyaml) return null;
   const y=await fetch(DATEN_BASIS+'/orga.yaml',{cache:'no-store'});
   if(!y.ok) return null;                       // Datenordner nicht ausgeliefert
@@ -3032,12 +3040,13 @@ async function modellSuchen(){
     catch(e){ clearTimeout(t); return null; } };
 
   /* 1) Nexus-/KOOS-Server mit eigenem Chat-Endpunkt */
-  const st=await j('/api/chat/status');
+  const st=await j('api/chat/status');
   if(st && (st.verfuegbar ?? st.ok ?? true)){
-    MODELL.art='nexus'; MODELL.url='/api/chat/stream';
+    MODELL.art='nexus'; MODELL.url='api/chat/stream';
     MODELL.modelle=(st.modelle||st.models||[]).map(m=>m.name||m);
     return modellBarNeu();
   }
+  if(!NEXUS_LOKAL){ MODELL.art=null; return modellBarNeu(); }
   /* 2) Hermes-Gateway (OpenAI-kompatibel, Tool-Calling über MCP) */
   const gw=await j('http://127.0.0.1:8080/v1/models');
   if(gw && gw.data){
@@ -3570,7 +3579,7 @@ $('#btn-cache-refresh').onclick=async()=>{
   const btn=$('#btn-cache-refresh');
   btn.classList.add('admin-spin'); btn.disabled=true;
   try{
-    const r=await fetch('/api/admin/cache/refresh',{method:'POST'});
+    const r=await fetch('api/admin/cache/refresh',{method:'POST'});
     const d=await r.json();
     if(d.ok) toast('✅ Cache geleert — Daten werden beim nächsten Laden frisch vom Dateisystem gelesen');
     else toast('❌ Cache-Refresh fehlgeschlagen: '+d.fehler);
@@ -3582,7 +3591,7 @@ $('#btn-reindex').onclick=async()=>{
   if(!confirm('Index neu bauen? Dauert etwa 2 Minuten auf dem Server. Fortfahren?')) return;
   btn.classList.add('admin-spin'); btn.disabled=true; toast('🏗️ Index wird neu gebaut …');
   try{
-    const r=await fetch('/api/admin/reindex',{method:'POST'});
+    const r=await fetch('api/admin/reindex',{method:'POST'});
     const d=await r.json();
     if(d.ok) toast('✅ Index neu gebaut ('+d.output_tail.join('; ')+')');
     else toast('❌ Reindex fehlgeschlagen: '+(d.fehler||'Exit '+d.exit_code));
