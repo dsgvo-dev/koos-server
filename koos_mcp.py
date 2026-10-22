@@ -36,6 +36,7 @@ try:
 except Exception:
     koos_embed = None
 
+# Bestandsauskunft (koos_bestand). Fehlt das Modul, fehlt nur dieses Tool.
 try:
     import koos_auskunft
 except Exception:
@@ -64,6 +65,22 @@ MCP_PORT      = int(os.environ.get("MCP_PORT", "8200"))
 # ══════════════════════════════════════════════════════════════════════════════
 # DATEN-LADER
 # ══════════════════════════════════════════════════════════════════════════════
+
+def _trifft(q: str, *felder: str) -> bool:
+    """Suchtreffer: q ist entweder (wie bisher) als ganze Zeichenfolge in einem
+    Feld enthalten, oder – bei mehreren Wörtern – jedes Wort steht in
+    mindestens einem Feld (UND-Verknüpfung). Leeres q trifft immer.
+    Vorher fand eine Mehrwort-Anfrage nur Einträge mit genau dieser
+    Wortfolge (Testlauf 18.10.2026)."""
+    if not q:
+        return True
+    if any(q in f for f in felder):
+        return True
+    woerter = q.split()
+    if len(woerter) < 2:
+        return False
+    return all(any(w in f for f in felder) for w in woerter)
+
 
 class KoosLoader:
     """Lädt und hält KOOS-Daten für einen Mandanten."""
@@ -165,7 +182,7 @@ class KoosLoader:
             name = str(oe.get("name", "")).lower()
             oid = str(oe.get("id", "")).lower()
             q = query.lower()
-            if q and q not in name and q not in oid:
+            if not _trifft(q, name, oid):
                 continue
             if parent_id and oe.get("parent") != parent_id:
                 continue
@@ -344,7 +361,7 @@ class KoosLoader:
         for p in self.prozesse:
             titel = str(p.get("titel", "")).lower()
             oid = str(p.get("id", "")).lower()
-            if q and q not in titel and q not in oid:
+            if not _trifft(q, titel, oid):
                 continue
             if oe_id and p.get("zustaendigeEinheit") != oe_id:
                 continue
@@ -368,7 +385,7 @@ class KoosLoader:
             titel = str(v.get("titel", "")).lower()
             zweck = str(v.get("zweck", "")).lower()
             oid = str(v.get("id", "")).lower()
-            if q and q not in titel and q not in zweck and q not in oid:
+            if not _trifft(q, titel, zweck, oid):
                 continue
             if oe_id and v.get("organisationseinheit") != oe_id:
                 continue
@@ -387,7 +404,7 @@ class KoosLoader:
             name = str(d.get("name", "")).lower()
             oid = str(d.get("id", "")).lower()
             oe = str(d.get("zuständige-einheit", "")).lower()
-            if q and q not in name and q not in oid and q not in oe:
+            if not _trifft(q, name, oid, oe):
                 continue
             formatted = self._format_daten(d)
             if schutzstufe and formatted["schutzstufe"] != schutzstufe:
@@ -426,9 +443,7 @@ class KoosLoader:
             name = str(r.get("name", "")).lower()
             rid = str(r.get("id", "")).lower()
             body = str(r.get("body", "")).lower()
-            if q and not any(
-                q in feld for feld in (name, rid, body)
-            ):
+            if not _trifft(q, name, rid, body):
                 continue
             formatted = self._format_regelung(r)
             if typ and (formatted["typ"] or "").lower() != typ.lower():

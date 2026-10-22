@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import re
 import statistics
 import sys
@@ -46,6 +47,9 @@ KOOS_ROOT = BASE_DIR.parent
 INDEX_PATH = BASE_DIR / ".koos-embed" / "index.json"
 EMBED_MODEL = "bge-m3"
 EMBED_URL = "http://localhost:11434"
+# Modell in Ollama geladen halten (Standard: Entladen nach 5 Minuten Leerlauf,
+# danach kostet die nächste Suche ca. 1 s Kaltstart; gemessen 12.10.2026).
+EMBED_KEEP_ALIVE = os.environ.get("EMBED_KEEP_ALIVE", "24h")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -55,7 +59,7 @@ EMBED_URL = "http://localhost:11434"
 def _embed(text: str, model_url: str = EMBED_URL, model: str = EMBED_MODEL) -> list[float]:
     """Ruft ein Ollama-Embedding ab. Unterstützt sowohl die neuere
     /api/embed- als auch die ältere /api/embeddings-Schnittstelle."""
-    payload = json.dumps({"model": model, "input": text}).encode("utf-8")
+    payload = json.dumps({"model": model, "input": text, "keep_alive": EMBED_KEEP_ALIVE}).encode("utf-8")
     req = urllib.request.Request(
         f"{model_url}/api/embed", data=payload,
         headers={"Content-Type": "application/json"},
@@ -69,7 +73,7 @@ def _embed(text: str, model_url: str = EMBED_URL, model: str = EMBED_MODEL) -> l
     except Exception:
         pass
 
-    payload = json.dumps({"model": model, "prompt": text}).encode("utf-8")
+    payload = json.dumps({"model": model, "prompt": text, "keep_alive": EMBED_KEEP_ALIVE}).encode("utf-8")
     req = urllib.request.Request(
         f"{model_url}/api/embeddings", data=payload,
         headers={"Content-Type": "application/json"},
