@@ -36,6 +36,11 @@ try:
 except Exception:
     koos_embed = None
 
+try:
+    import koos_auskunft
+except Exception:
+    koos_auskunft = None
+
 # ══════════════════════════════════════════════════════════════════════════════
 # KONFIGURATION — Umgebungsvariablen für den produktiven Betrieb
 # ══════════════════════════════════════════════════════════════════════════════
@@ -738,8 +743,24 @@ def _build_tools() -> list[Tool]:
     ]
 
 
+def _bestand_tool() -> Tool:
+    return Tool(
+        name="koos_bestand",
+        description=f"Auskunft über den Bestand der {BRAND}-Datenbank dieser Organisation: "
+                    "Anzahl Organisationseinheiten, Prozesse, Datenarten, Verarbeitungstätigkeiten "
+                    "und Regelungen, ihre Verteilung (Schutzstufen, Typen, Status), die verfügbaren "
+                    "Suchwerkzeuge und ob der geladene Stand noch aktuell ist. "
+                    "Bei Fragen wie 'Welche Daten sind vorhanden?', 'Wie viele Prozesse gibt es?' "
+                    "ZUERST dieses Tool aufrufen und nur aus seiner Ausgabe antworten; Zahlen unverändert und vollständig wiedergeben, nichts umrechnen oder weglassen.",
+        inputSchema={"type": "object", "properties": {}, "additionalProperties": False},
+    )
+
+
 async def _handle_list_tools(ctx, params: ListToolsRequest | None) -> ListToolsResult:
-    return ListToolsResult(tools=_build_tools())
+    tools = _build_tools()
+    if koos_auskunft is not None:
+        tools.append(_bestand_tool())
+    return ListToolsResult(tools=tools)
 
 
 async def _handle_call_tool(ctx, params: CallToolRequestParams) -> CallToolResult:
@@ -840,6 +861,11 @@ async def _handle_call_tool(ctx, params: CallToolRequestParams) -> CallToolResul
         return CallToolResult(content=[TextContent(
             type="text",
             text=json.dumps(context, ensure_ascii=False, indent=2) + f"\n\n---\n*Quelle: {BRAND}-Datenbank*"
+        )])
+
+    elif name == "koos_bestand" and koos_auskunft is not None:
+        return CallToolResult(content=[TextContent(
+            type="text", text=koos_auskunft.bestand(_loader, _build_tools(), BRAND)
         )])
 
     else:
