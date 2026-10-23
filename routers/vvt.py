@@ -182,9 +182,11 @@ async def put_vvt(vvt_id: str, request: Request, force: bool = Query(False, desc
 
     existiert_vorher = datei.exists()
 
+    begruendung = None
     content_type = request.headers.get("content-type", "")
     if "application/json" in content_type:
         data: dict = await request.json()
+        begruendung = data.pop("_begruendung", None)
         alle_prozesse = parser.lade_alle_prozesse(config.PROZESSE_DIR)
         alle_daten    = parser.lade_alle_daten(config.DATEN_DIR)
         pruefung = parser.validiere_vvt_referenzen(data, alle_prozesse, alle_daten)
@@ -214,7 +216,7 @@ async def put_vvt(vvt_id: str, request: Request, force: bool = Query(False, desc
 
     datei.write_text(md_text, encoding="utf-8")
     aktion = "aktualisiert" if existiert_vorher else "angelegt"
-    git_service.commit([datei], f"VVT {vvt_id} {aktion}")
+    git_service.commit([datei], f"VVT {vvt_id} {aktion}", begruendung=begruendung)
     cache_invalidieren()
     return {"ok": True, "id": vvt_id, "gespeichert": True}
 
@@ -224,8 +226,19 @@ async def delete_vvt(vvt_id: str, request: Request) -> dict:
     datei = _datei(vvt_id)
     if not datei.exists():
         raise HTTPException(404, detail=f"VVT-Eintrag '{vvt_id}' nicht gefunden")
+    # Die Datenschutzkette dieser VVT (bes-, risiko-, tom- … und baseline-)
+    # ist aus ihr erzeugt und ohne sie verwaist. Sie geht im selben Commit
+    # mit; „Rückgängig“ stellt VVT und Kette zusammen wieder her
+    # (PLAN-2026-10-23, Stufe 3). kette_neu.sh räumt solche Dateien nicht auf.
+    from routers.kette import GRUPPEN
+    kette = [config.DATA_DIR / ordner / f"{praefix}{vvt_id}.json"
+             for ordner, praefix, _ in [*GRUPPEN, ("baseline", "baseline-", "baseline")]]
+    kette = [p for p in kette if p.is_file()]
     datei.unlink()
-    git_service.commit([datei], f"VVT {vvt_id} gelöscht",
+    for p in kette:
+        p.unlink()
+    git_service.commit([datei, *kette], f"VVT {vvt_id} gelöscht",
                        begruendung=await begruendung_lesen(request))
     cache_invalidieren()
-    return {"ok": True, "id": vvt_id}
+    return {"ok": True, "id": vvt_id,
+            "kette_entfernt": [str(p.relative_to(config.DATA_DIR)) for p in kette]}

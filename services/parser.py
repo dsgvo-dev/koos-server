@@ -1024,6 +1024,12 @@ def vvt_to_md_merge(incoming: dict, existing_path: "Path | None" = None) -> str:
     # fuehrender Null (uid: 014) den bereits von YAML verfaelschten Oktalwert
     # festschreiben. Das ist ein Datenbefund, kein Speicherproblem: solange er
     # offen ist, laesst der Schreibpfad das Feld unangetastet.
+    # Ausnahme Neuanlage: Ohne vorhandene uid wird sie als Text geschrieben
+    # (Nexus, Stufe 3) — sonst entstünde eine VVT ohne uid.
+    if "uid" not in orig_meta and incoming.get("uid"):
+        if incoming.get("id") and "id" not in orig_meta:
+            orig_meta["id"] = incoming["id"]          # Reihenfolge wie im Bestand: id, uid
+        orig_meta["uid"] = str(incoming["uid"])
     for field in ("id", "titel", "status", "organisationseinheit",
                   "zweck", "rechtsgrundlage", "kategorien_betroffener",
                   "kategorien_daten", "empfaenger", "transfer_drittland",
