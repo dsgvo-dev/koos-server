@@ -625,3 +625,48 @@ body.assist-zu #assist{display:none}
 @media (max-width:640px){ .pf-zeile{flex-wrap:wrap} .pf-overlay{padding:0} .pf-box{max-height:100vh;border-radius:0} }
 .pf-warn{color:var(--warn)}
 .pf-fehler-text{color:var(--err)}
+
+/* ── Stammdaten: Startseiten, Datenqualität, Listenfilter (stammdaten-start.js) ── */
+.kopf-knoepfe{display:inline-flex;gap:6px;align-items:center;flex-shrink:0}
+.lf-balken{display:flex;align-items:center;gap:8px;justify-content:space-between;margin:0 15px 8px;
+  padding:6px 8px 6px 10px;border-radius:6px;background:var(--info-bg);color:var(--info);font-size:12px}
+.lf-balken span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lf-weg{border:none;background:none;color:inherit;cursor:pointer;font-size:13px;padding:0 3px;opacity:.75}
+.lf-weg:hover{opacity:1}
+.dq-punkt{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--warn);flex-shrink:0;align-self:center}
+.st{max-width:1000px}
+.st-hero h2{font-size:21px;font-weight:600}
+.st-hero p{color:var(--fg-mute);font-size:13.5px;margin:6px 0 22px;line-height:1.55}
+.st-knoepfe{display:inline-flex;gap:6px;margin-left:10px;text-transform:none;letter-spacing:0;font-weight:400;vertical-align:middle}
+.st-raster{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:8px 28px;margin-top:8px}
+.st-vert{margin-top:20px}
+.st-zeile{display:flex;align-items:center;gap:10px;padding:3px 6px;margin:0 -6px;border-radius:5px}
+.st-zeile .balken{flex:1;margin:0}
+.st-zeile.klickbar{cursor:pointer}
+.st-zeile.klickbar:hover{background:var(--bg-sunk)}
+.st-zeile.aktiv{background:var(--info-bg)}
+.st-zeile:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+.st-label{width:150px;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0}
+.st-n{width:40px;text-align:right;font-size:12.5px;font-variant-numeric:tabular-nums;color:var(--fg-mute)}
+.st-rest{font-size:11px;color:var(--fg-faint);margin-top:4px}
+.balken i.warn{background:var(--warn)}
+.balken i.err{background:var(--err)}
+.dq-karten{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-top:8px}
+.dq-karte{border:1px solid var(--line);border-left-width:4px;border-radius:8px;padding:11px 13px;background:var(--bg)}
+.dq-karte.ok{border-left-color:var(--ok)}
+.dq-karte.warn{border-left-color:var(--warn)}
+.dq-karte.err{border-left-color:var(--err)}
+.dq-karte.aktiv{box-shadow:0 0 0 2px var(--info)}
+.dq-kopf{display:flex;align-items:center;gap:8px}
+.dq-ampel{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.dq-ampel.ok{background:var(--ok)} .dq-ampel.warn{background:var(--warn)} .dq-ampel.err{background:var(--err)}
+.dq-titel{flex:1;font-size:13px;font-weight:600}
+.dq-zahl{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
+.dq-zahl small{font-size:11px;font-weight:400;color:var(--fg-faint)}
+.dq-hinweis{font-size:11.5px;color:var(--fg-faint);margin-top:4px}
+.dq-liste{list-style:none;margin:8px 0;font-size:12.5px;line-height:1.7}
+.dq-liste li{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dq-liste .link{cursor:pointer;color:var(--fg)}
+.dq-liste .link:hover{text-decoration:underline}
+.dq-gut{font-size:12px;color:var(--ok);margin-top:6px}
+@media (max-width:640px){ .st-label{width:110px} }

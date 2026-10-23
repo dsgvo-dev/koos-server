@@ -77,7 +77,7 @@ function mStart(){
     <div class="karte-label">${label}</div>${fuss?`<div class="karte-fuss">${fuss}</div>`:''}</div>`;
   return `<div class="start-inner">
     <div class="start-hero">
-      <h1>Kommunalverwaltung</h1>
+      <h1>${esc(SITZUNG.organisation||'Kommunalverwaltung')}</h1>
       <p>Gemeinsame Oberfläche für Organisationsdaten (KOOS) und Datenschutzdokumentation (DSMS/TOM).
          Der Vorgangskontext bleibt über alle Module hinweg erhalten; der Assistent löst ihn sonst
          aus der Frage auf.</p>
@@ -186,11 +186,11 @@ function mOrganisation(){
   return `
   <div class="liste">
     <div class="liste-kopf"><div><p>Organisationseinheiten</p><span>${esc(SITZUNG.organisation||'')}</span></div>
-      ${pflegeNeuKnopf('oe')}</div>
+      <span class="kopf-knoepfe">${uebersichtKnopf('organisation')}${pflegeNeuKnopf('oe')}</span></div>
     <div class="liste-scroll">${baum(null)}</div>
   </div>
   <div class="detail">
-    ${!o?'<div class="leer-hinweis">Einheit auswählen</div>':`
+    ${!o?startseite('organisation'):`
     <h2>${esc(o.name)}</h2>
     <div class="detail-id">${o.id}${o.parent?' · übergeordnet: '+esc(oeName(o.parent)):' · Wurzel'}</div>
     <div class="aktionsleiste" style="margin:0 0 22px;padding:0;border:none">
@@ -222,21 +222,22 @@ function tiefe(o){ let t=0,c=o; while(c&&c.parent){ c=OE.find(x=>x.id===c.parent
 function mProzesse(){
   const sel=S.auswahl.prozesse, p=procById(sel);
   const vts=p?VVT.filter(v=>(v.prozesse||[]).includes(p.id)):[];
-  const g=filtern('prozesse',PROZESSE,x=>x.name+' '+oeName(x.oe)+' '+(x.leika||'')+' '+(x.ozg||''));
+  const g=filtern('prozesse',lfAnwenden('prozesse',PROZESSE),x=>x.name+' '+oeName(x.oe)+' '+(x.leika||'')+' '+(x.ozg||''));
   return `
   <div class="liste">
-    <div class="liste-kopf"><div><p>Prozesse</p><span>${g.treffer.length} von ${PROZESSE.length}</span></div>${pflegeNeuKnopf('prozess')}</div>
+    <div class="liste-kopf"><div><p>Prozesse</p><span>${g.treffer.length} von ${PROZESSE.length}</span></div><span class="kopf-knoepfe">${uebersichtKnopf('prozesse')}${pflegeNeuKnopf('prozess')}</span></div>
     <div class="liste-suche"><input type="search" placeholder="Prozesse suchen …" data-filter="prozesse" value="${esc(S.filter.prozesse)}"></div>
+    ${lfBalken('prozesse')}
     <div class="liste-scroll">${g.sichtbar.map(x=>`
       <div class="li${x.id===sel?' active':''}" data-prozess="${x.id}">
         <div class="li-txt"><div class="li-name">${esc(x.name)}</div>
-        <div class="li-sub"><span>${esc(oeName(x.oe))}</span>
+        <div class="li-sub">${dqPunkt(x.id)}<span>${esc(oeName(x.oe))}</span>
         ${x.leika?`<span class="pill">LeiKa ${x.leika}</span>`:''}${x.ozg?`<span class="pill">OZG ${x.ozg}</span>`:''}</div></div>
       </div>`).join('')||'<div class="leer-hinweis" style="padding:26px">Keine Treffer</div>'}
       ${mehrBtn('prozesse',g)}</div>
   </div>
   <div class="detail">
-    ${!p?'<div class="leer-hinweis">Prozess auswählen</div>':`
+    ${!p?startseite('prozesse'):`
     <h2>${esc(p.name)}</h2>
     <div class="detail-id">${p.id}${p.status?' · '+esc(p.status):''}${p.bereich?' · '+esc(p.bereich):''}</div>
     <div class="aktionsleiste" style="margin:0 0 22px;padding:0;border:none">
@@ -244,6 +245,7 @@ function mProzesse(){
       <button class="btn klein" data-frage="Ist der Prozess ${p.name.replace(/"/g,'')} im VVT abgebildet?">Assistent fragen</button>
       ${pflegeKnoepfe('prozess',p.id)}
     </div>
+    ${dqHinweis(p.id)}
     <div class="hinweis" style="margin-top:-6px">Die besonderen Kategorien nach Art. 9 DSGVO sind im Bestand
       <b>kein eigenes Feld</b>. Angezeigt wird nur, ob Name, Datenkategorie oder Schlagworte ein einschlägiges
       Wort enthalten. Ein fehlender Treffer heißt nicht, dass keine besonderen Kategorien verarbeitet werden —
@@ -296,15 +298,16 @@ function mDatenspeicher(){
   const vts=d?VVT.filter(v=>(v.dstores||[]).includes(d.id)):[];
   const procs=d?PROZESSE.filter(p=>(p.dstores||[]).includes(d.id)):[];
   const stufeCls={A:'',B:'',C:'warn',D:'err',E:'err'};
-  const g=filtern('datenspeicher',DSTORES,x=>x.name+' '+(x.tags||[]).join(' '));
+  const g=filtern('datenspeicher',lfAnwenden('datenspeicher',DSTORES),x=>x.name+' '+(x.tags||[]).join(' '));
   return `
   <div class="liste">
-    <div class="liste-kopf"><div><p>Datenspeicher</p><span>${g.treffer.length} von ${DSTORES.length}</span></div>${pflegeNeuKnopf('daten')}</div>
+    <div class="liste-kopf"><div><p>Datenspeicher</p><span>${g.treffer.length} von ${DSTORES.length}</span></div><span class="kopf-knoepfe">${uebersichtKnopf('datenspeicher')}${pflegeNeuKnopf('daten')}</span></div>
     <div class="liste-suche"><input type="search" placeholder="Datenarten suchen …" data-filter="datenspeicher" value="${esc(S.filter.datenspeicher)}"></div>
+    ${lfBalken('datenspeicher')}
     <div class="liste-scroll">${g.sichtbar.map(x=>`
       <div class="li${x.id===sel?' active':''}" data-dstore="${x.id}">
         <div class="li-txt"><div class="li-name">${esc(x.name)}</div>
-        <div class="li-sub"><span class="pill ${stufeCls[x.schutz]||''}">Stufe ${esc(x.schutz||'?')}</span>
+        <div class="li-sub">${dqPunkt(x.id)}<span class="pill ${stufeCls[x.schutz]||''}">Stufe ${esc(x.schutz||'?')}</span>
         <span class="pill ${bsiCls(x.bsiBedarf)}">BSI ${esc(x.bsiBedarf||'?')}</span>
         ${x.art9?'<span class="pill err">Art. 9</span>':''}
         ${divergenz(x).length?'<span class="pill warn" title="Datenschutz und BSI laufen auseinander">⚠</span>':''}</div></div>
@@ -312,10 +315,11 @@ function mDatenspeicher(){
       ${mehrBtn('datenspeicher',g)}</div>
   </div>
   <div class="detail">
-    ${!d?'<div class="leer-hinweis">Datenart auswählen</div>':`
+    ${!d?startseite('datenspeicher'):`
     <h2>${esc(d.name)}</h2>
     <div class="detail-id">${d.id}${d.bereich?' · '+esc(d.bereich):''}</div>
     <div class="aktionsleiste" style="margin:0 0 22px;padding:0;border:none">${pflegeKnoepfe('daten',d.id)}</div>
+    ${dqHinweis(d.id)}
     <div class="hinweis">Die Schutzstufe wird gemäß <b>Richtlinie zur Datenklassifizierung</b> (Punkt 4.2)
       ausschließlich hier am Datenspeicher geführt. Verarbeitungstätigkeiten leiten sie nach dem
       Maximumprinzip ab.</div>
@@ -359,20 +363,23 @@ function mDatenspeicher(){
 /* ── Regelungen ────────────────────────────────────────────────────── */
 function mRegelungen(){
   const sel=S.auswahl.regelungen, r=regById(sel);
+  const liste=lfAnwenden('regelungen',REGELUNGEN);
   return `
   <div class="liste">
-    <div class="liste-kopf"><div><p>Regelungen</p><span>${REGELUNGEN.length} Dokumente</span></div>${pflegeNeuKnopf('regelung')}</div>
-    <div class="liste-scroll">${REGELUNGEN.map(x=>`
+    <div class="liste-kopf"><div><p>Regelungen</p><span>${liste.length===REGELUNGEN.length?REGELUNGEN.length+' Dokumente':liste.length+' von '+REGELUNGEN.length}</span></div><span class="kopf-knoepfe">${uebersichtKnopf('regelungen')}${pflegeNeuKnopf('regelung')}</span></div>
+    ${lfBalken('regelungen')}
+    <div class="liste-scroll">${liste.map(x=>`
       <div class="li${x.id===sel?' active':''}" data-regelung="${x.id}">
         <div class="li-txt"><div class="li-name">${esc(x.name)}</div>
-        <div class="li-sub"><span class="pill">${esc(x.typ||'')}</span><span>${esc(x.stand||'')}</span></div></div>
+        <div class="li-sub">${dqPunkt(x.id)}<span class="pill">${esc(x.typ||'')}</span><span>${esc(x.stand||'')}</span></div></div>
       </div>`).join('')}</div>
   </div>
   <div class="detail">
-    ${!r?'<div class="leer-hinweis">Regelung auswählen</div>':`
+    ${!r?startseite('regelungen'):`
     <h2>${esc(r.name)}</h2>
     <div class="detail-id">${r.id} · ${esc(r.typ||'')} · Stand ${esc(r.stand||'')} · federführend ${esc(oeName(r.oe))}${r.status?' · '+esc(r.status):''}</div>
     <div class="aktionsleiste" style="margin:0 0 22px;padding:0;border:none">${pflegeKnoepfe('regelung',r.id)}</div>
+    ${dqHinweis(r.id)}
     ${r.gremium?`<div class="sektion"><div class="sektion-label">Entscheidendes Gremium</div>
       <div class="feld-wert">${esc(r.gremium)}</div></div>`:''}
     ${r.kontext?`<div class="sektion"><div class="sektion-label">Kontext</div>

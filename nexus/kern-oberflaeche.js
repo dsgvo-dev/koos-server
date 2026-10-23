@@ -35,12 +35,13 @@ GRUPPEN.forEach(g=>g.module.forEach(m=>MODUL_NAME[m.id]=m.name));
 const S = {
   modul:'start',
   kontext:{typ:null, id:null, text:null},   // typ: 'vt' | 'prozess' | 'oe'
-  auswahl:{organisation:'oe-amt-33', prozesse:null, datenspeicher:null, regelungen:null, vvt:null},
+  auswahl:{organisation:null, prozesse:null, datenspeicher:null, regelungen:null, vvt:null},
   tomKat:'ORG',
   tomTab:'toms',
   graphKat:'', graphSort:'refs', graphNurSel:true, graphSel:null,
   vSicht:'proc-vvt', vAmt:'',
   filter:{prozesse:'', datenspeicher:'', vvt:'', regelungen:'', organisation:''},
+  lfilter:{prozesse:null, datenspeicher:null, regelungen:null},   // Listenfilter aus den Startseiten (stammdaten-start.js)
   limit:{prozesse:120, datenspeicher:120, vvt:120, tomListe:60},
   verlauf:[],
   threads:[],

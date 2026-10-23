@@ -13,7 +13,7 @@
    schreibenden Aufruf ab. Abmelden kennt Basic Auth nicht — dafür gibt es
    hier bewusst keinen Knopf. */
 
-const SITZUNG={mandant:null, organisation:'', angemeldet:false, benutzer:'', rolle:null, modus:null, vokabular:{}};
+const SITZUNG={mandant:null, organisation:'', angemeldet:false, benutzer:'', rolle:null, modus:null, vokabular:{}, org:null};
 
 function mandantAusAdresse(pfad){
   const m=/\/koos\/([^/]+)\//.exec(pfad);
@@ -57,6 +57,7 @@ async function sitzungLaden(){
   const [konf,ich]=await Promise.all([json('api/config'), json('api/ich')]);
   const org=(konf&&konf.organisation)||{};
   SITZUNG.organisation=org.name||org.kurzname||'';
+  SITZUNG.org=konf?org:null;                        // Organisationsangaben aus koos.yaml
   SITZUNG.vokabular=(konf&&konf.vokabular)||{};   // Wertelisten aus koos.yaml (pflege.js)
   if(ich){
     SITZUNG.angemeldet=!!ich.angemeldet;
