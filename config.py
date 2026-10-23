@@ -45,8 +45,8 @@ GUI_PATH: Path = Path(os.environ.get(
     str(Path(__file__).parent / "index.html")
 ))
 
-# Static-Files: DATA_DIR für zusätzliche statische Ressourcen
-STATIC_DIR: Path = DATA_DIR
+# STATIC_DIR (früher = DATA_DIR) entfällt seit 23.10.2026: Der Datenordner
+# wird nicht mehr als Dateibaum ausgeliefert, nur über die API.
 
 # ── Maßnahmen- und Gefährdungskatalog ─────────────────────────────────────────
 # Der Katalog liegt bewusst NICHT unter DATA_DIR: er ist DSMS-Wissen und wird

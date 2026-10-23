@@ -11,7 +11,6 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
-from fastapi.staticfiles import StaticFiles
 
 import config
 from routers import orga, prozesse, daten, regelungen, stats, llm, chat, koos_config, vvt, tom, kette, admin
@@ -223,9 +222,10 @@ def health() -> dict:
 # von Nexus als Rückfall unter /pflege erreichbar (Entscheidung 2).
 # Beide Seiten rufen die API relativ auf ("api/…"); deshalb liegen sie direkt
 # unter der Wurzel und nicht in einem Unterpfad mit Schrägstrich am Ende.
-
-if config.STATIC_DIR.is_dir():
-    app.mount("/static", StaticFiles(directory=str(config.STATIC_DIR)), name="static")
+#
+# Der Datenordner wird nicht als Dateibaum ausgeliefert (23.10.2026): Beide
+# Oberflächen lesen ausschließlich über die API. Früher gingen /static/… und
+# die Auffangroute auf DATA_DIR und gaben jede Datei heraus, auch .git/config.
 
 # Ausgeliefert wird nur der Ordner nexus/ (Entscheidung 3) — das
 # Server-Verzeichnis als Ganzes würde den Quelltext offenlegen.
@@ -282,12 +282,9 @@ else:
 
 @app.get("/{pfad:path}", include_in_schema=False)
 def catch_all(pfad: str) -> FileResponse:
-    """Dateien unterhalb des Datenverzeichnisses, sonst die Startseite."""
-    datei = (config.STATIC_DIR / pfad).resolve()
-    # Riegel: nur Dateien unterhalb des Datenverzeichnisses ausliefern.
-    # Ohne ihn gibt ein Pfad mit '..' Dateien außerhalb davon heraus.
-    if datei.is_file() and datei.is_relative_to(config.STATIC_DIR.resolve()):
-        return FileResponse(str(datei))
+    """Unbekannte Pfade → Startseite; unbekannte API-Pfade → 404 statt HTML."""
+    if pfad == "api" or pfad.startswith("api/"):
+        raise HTTPException(404, detail="Nicht gefunden")
     return _nexus_startseite()
 
 
