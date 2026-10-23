@@ -168,9 +168,18 @@ app.include_router(admin.router)
 
 # ── Audit-Log-Endpunkt ────────────────────────────────────────────────────────
 @app.get("/api/audit", tags=["Audit"], summary="Letzte Git-Commits")
-def get_audit(n: int = 50) -> list[dict]:
-    """Gibt die letzten n Git-Commits als Audit-Trail zurück."""
-    return git_service.log_lesen(n=min(n, 500))
+def get_audit(n: int = 50, pfad: str | None = None) -> list[dict]:
+    """
+    Gibt die letzten n Git-Commits als Audit-Trail zurück.
+    Mit `pfad` nur die Commits einer Stammdatendatei (Verlauf eines Eintrags,
+    PLAN-2026-10-23 Stufe 2), z. B. prozesse/proc-x.md oder orga.yaml.
+    """
+    import re
+    if pfad is not None and not re.match(
+        r"^(orga\.yaml|(prozesse|daten|regelungen|vvt)/[a-z0-9][a-z0-9\-]{0,126}\.md)$", pfad
+    ):
+        raise HTTPException(400, detail="Ungültiger Pfad")
+    return git_service.log_lesen(n=min(n, 500), pfad=pfad)
 
 
 @app.get("/api/audit/{commit_hash}/diff", tags=["Audit"], summary="Diff eines Commits")

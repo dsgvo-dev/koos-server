@@ -12,6 +12,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request, Response
 
 import config
+from services.begruendung import begruendung_lesen
 from services import parser
 from services import git_service
 from services.parser import parse_frontmatter, cache_invalidieren
@@ -43,7 +44,10 @@ def _parse(dateiname: str, text: str) -> dict:
         "typ":                   meta.get("typ", ""),
         "status":                meta.get("status", "aktiv"),
         "datum":                 str(meta["datum"]) if meta.get("datum") else None,
-        "entscheidendesGremium": meta.get("entscheidendes-gremium", ""),
+        # Ältere Dateien führen die camelCase-Schreibweise (8 von 27 am
+        # 23.10.2026). Ohne sie käme das Feld leer in die Maske und ginge
+        # beim nächsten Speichern verloren.
+        "entscheidendesGremium": meta.get("entscheidendes-gremium") or meta.get("entscheidendesGremium", ""),
         "ersetzt":               meta.get("ersetzt", None),
         "zustaendigeEinheit":    meta.get("zustaendigeEinheit") or meta.get("zuständige-einheit", ""),
         "body":                  body,
@@ -122,11 +126,12 @@ async def put_regelung(reg_id: str, request: Request) -> dict:
 
 
 @router.delete("/{reg_id}", summary="Regelung löschen")
-def delete_regelung(reg_id: str) -> dict:
+async def delete_regelung(reg_id: str, request: Request) -> dict:
     datei = _datei(reg_id)
     if not datei.exists():
         raise HTTPException(404, detail=f"Regelung '{reg_id}' nicht gefunden")
     datei.unlink()
-    git_service.commit([datei], f"Regelung {reg_id} gelöscht")
+    git_service.commit([datei], f"Regelung {reg_id} gelöscht",
+                       begruendung=await begruendung_lesen(request))
     cache_invalidieren()
     return {"ok": True, "id": reg_id}

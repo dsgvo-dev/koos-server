@@ -122,7 +122,7 @@ def commit(
     return True
 
 
-def log_lesen(n: int = 50, data_dir: Path = DATA_DIR) -> list[dict]:
+def log_lesen(n: int = 50, data_dir: Path = DATA_DIR, pfad: str | None = None) -> list[dict]:
     """
     Gibt die letzten n Commits als Liste von Dicts zurück.
     Format: [{
@@ -130,6 +130,8 @@ def log_lesen(n: int = 50, data_dir: Path = DATA_DIR) -> list[dict]:
         "nachricht": str,     # Subject (erste Zeile)
         "begruendung": str,   # Body-Zeile "Begründung: ..." wenn vorhanden
     }]
+    pfad: nur Commits, die diese Datei (relativ zu data_dir) berühren —
+    auch ihre Löschung. Prüfen muss der Aufrufer.
     """
     # %B = vollständige Commit-Nachricht (Subject + Body)
     result = _run(
@@ -137,6 +139,7 @@ def log_lesen(n: int = 50, data_dir: Path = DATA_DIR) -> list[dict]:
             "git", "log",
             f"-{n}",
             "--pretty=format:%H\x1f%an\x1f%ai\x1f%s\x1f%b\x1e",
+            *(["--", pfad] if pfad else []),
         ],
         cwd=data_dir,
     )

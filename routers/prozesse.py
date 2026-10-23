@@ -16,6 +16,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 
 import config
+from services.begruendung import begruendung_lesen
 from services import parser, git_service
 from services.parser import cache_invalidieren
 
@@ -137,11 +138,12 @@ async def put_prozess(prozess_id: str, request: Request) -> dict:
 
 
 @router.delete("/{prozess_id}", summary="Prozess löschen")
-def delete_prozess(prozess_id: str) -> dict:
+async def delete_prozess(prozess_id: str, request: Request) -> dict:
     datei = _datei(prozess_id)
     if not datei.exists():
         raise HTTPException(404, detail=f"Prozess '{prozess_id}' nicht gefunden")
     datei.unlink()
-    git_service.commit([datei], f"Prozess {prozess_id} gelöscht")
+    git_service.commit([datei], f"Prozess {prozess_id} gelöscht",
+                       begruendung=await begruendung_lesen(request))
     cache_invalidieren()
     return {"ok": True, "id": prozess_id}

@@ -12,6 +12,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request, Response
 
 import config
+from services.begruendung import begruendung_lesen
 from services import parser, git_service
 from services.parser import cache_invalidieren
 
@@ -90,11 +91,12 @@ async def put_daten(daten_id: str, request: Request) -> dict:
 
 
 @router.delete("/{daten_id}", summary="Datenart löschen")
-def delete_daten(daten_id: str) -> dict:
+async def delete_daten(daten_id: str, request: Request) -> dict:
     datei = _datei(daten_id)
     if not datei.exists():
         raise HTTPException(404, detail=f"Datenart '{daten_id}' nicht gefunden")
     datei.unlink()
-    git_service.commit([datei], f"Datenart {daten_id} gelöscht")
+    git_service.commit([datei], f"Datenart {daten_id} gelöscht",
+                       begruendung=await begruendung_lesen(request))
     cache_invalidieren()
     return {"ok": True, "id": daten_id}

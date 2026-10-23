@@ -24,6 +24,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 
 import config
+from services.begruendung import begruendung_lesen
 from services import parser, git_service
 from services.parser import cache_invalidieren
 
@@ -219,11 +220,12 @@ async def put_vvt(vvt_id: str, request: Request, force: bool = Query(False, desc
 
 
 @router.delete("/{vvt_id}", summary="VVT-Eintrag löschen")
-def delete_vvt(vvt_id: str) -> dict:
+async def delete_vvt(vvt_id: str, request: Request) -> dict:
     datei = _datei(vvt_id)
     if not datei.exists():
         raise HTTPException(404, detail=f"VVT-Eintrag '{vvt_id}' nicht gefunden")
     datei.unlink()
-    git_service.commit([datei], f"VVT {vvt_id} gelöscht")
+    git_service.commit([datei], f"VVT {vvt_id} gelöscht",
+                       begruendung=await begruendung_lesen(request))
     cache_invalidieren()
     return {"ok": True, "id": vvt_id}

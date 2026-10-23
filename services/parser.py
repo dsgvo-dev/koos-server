@@ -4,6 +4,7 @@ Python-Ports der JavaScript-Parser aus preview.html.
 Wandelt YAML- und Markdown-Dateien in strukturierte Dictionaries um.
 """
 from __future__ import annotations
+import datetime
 import io
 import re
 from pathlib import Path
@@ -461,6 +462,13 @@ def _setze(meta: Any, key: str, val: Any) -> None:
     ohne Anlass. Mit dieser Prüfung bleibt jede Datei, an der die Maske nichts
     ändert, Zeichen für Zeichen dieselbe."""
     if key in meta and meta[key] == val:
+        return
+    # YAML liest ein unquotiertes Datum als date; die API gibt es als Text
+    # zurück ("2026-09-15"). Derselbe Tag ist keine Änderung — sonst würde
+    # aus `datum: 2026-09-15` bei jedem Speichern `datum: '2026-09-15'`.
+    alt = meta.get(key) if isinstance(meta, dict) else None
+    if isinstance(alt, (datetime.date, datetime.datetime)) and isinstance(val, str) \
+            and val.strip() in (alt.isoformat(), str(alt)):
         return
     # Ein leer gelassenes Feld der Maske schreibt nichts, wo ohnehin nichts
     # steht. Zwei Fälle:
@@ -1081,7 +1089,7 @@ def parse_regelung_md(dateiname: str, text: str) -> dict:
         "typ":                meta.get("typ", ""),
         "status":             meta.get("status", "aktiv"),
         "datum":              meta.get("datum", ""),
-        "entscheidendesGremium": meta.get("entscheidendes-gremium", ""),
+        "entscheidendesGremium": meta.get("entscheidendes-gremium") or meta.get("entscheidendesGremium", ""),
         "zustaendigeEinheit": (
             meta.get("zustaendigeEinheit")
             or meta.get("zuständige-einheit", "")
