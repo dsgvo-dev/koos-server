@@ -1,6 +1,6 @@
 # KOOS-Server — Referenzimplementierung und Browser-Oberfläche
 
-KOOS-Server ist die **Referenzimplementierung des KOOS-Datenformats**: ein schlanker FastAPI-Server, der KOOS-Datenpakete als REST-API bereitstellt und `index.html` als Single-Page-Anwendung ausliefert.
+KOOS-Server ist die **Referenzimplementierung des KOOS-Datenformats**: ein schlanker FastAPI-Server, der KOOS-Datenpakete als REST-API bereitstellt und die Oberflächen ausliefert: Nexus (Ordner `nexus/`) als Startseite und die KOOS-Pflegeoberfläche `index.html` als Rückfall unter `/pflege`.
 
 > Datenstruktur, Dateiformate und Designprinzipien beschreibt: **[koos-daten](https://github.com/dsgvo-dev/koos-daten)**
 
@@ -220,7 +220,9 @@ Der Abschnitt `vokabular` definiert die erlaubten Werte für Dropdown-Felder in 
 
 ## Browser-Oberfläche
 
-Die Web-Oberfläche (`http://localhost:8090`) ist eine Single-Page-Anwendung (SPA). Der Server liefert `index.html` aus dem Verzeichnis, das über `KOOS_GUI_PATH` konfiguriert ist — standardmäßig `koos-server/index.html`.
+Unter `http://localhost:8090/` liefert der Server die Nexus-Oberfläche aus dem Ordner `nexus/` aus (`index.html`, `nexus.css` und die Skripte; über `/nexus/<datei>` nur HTML, CSS und JS aus genau diesem Ordner). Die frühere Adresse `/nexus` leitet auf die Startseite weiter. Der Mandant ergibt sich hinter nginx aus der Adresse `/koos/<kunde>/`, der angemeldete Nutzer aus `GET /api/ich`.
+
+Die KOOS-Pflegeoberfläche bleibt bis zur Abnahme von Nexus als Rückfall unter `http://localhost:8090/pflege` erreichbar (PLAN-2026-10-23-nexus-wird-kundenansicht, Entscheidung 2). Der Server liefert dort `index.html` aus dem Verzeichnis, das über `KOOS_GUI_PATH` konfiguriert ist — standardmäßig `koos-server/index.html`. Die folgenden Abschnitte beschreiben diese Pflegeoberfläche.
 
 ### Navigation
 
@@ -474,7 +476,8 @@ koos-server/
 ├── requirements.txt          ← Python-Abhängigkeiten
 ├── install.sh                ← Erstinstallation (venv + pip)
 ├── start.sh                  ← Server starten (dev: --reload, prod: --prod)
-├── index.html                ← Browser-Oberfläche (SPA, via KOOS_GUI_PATH konfigurierbar)
+├── nexus/                    ← Nexus-Oberfläche (Startseite /): index.html, nexus.css, Skripte
+├── index.html                ← KOOS-Pflegeoberfläche unter /pflege (via KOOS_GUI_PATH konfigurierbar)
 ├── adrs/                     ← Architekturentscheidungen (ADR-Muster)
 │   ├── adr-001-dateiformat.md
 │   ├── adr-002-id-prinzip.md
