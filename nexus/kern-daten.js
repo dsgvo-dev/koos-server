@@ -86,11 +86,14 @@ function kettenstaendeErmitteln(){
       besonderheiten: stand(K.bes[v.id]),
       schwellwert:    stand(K.schwellwert[v.id]),
       risiko:         stand(K.risiko[v.id]),
-      tom:            t ? ((t.ist||[]).length ? 'wip' : 'offen') : 'offen',
+      /* Seit Stufe 4 rechnet der Server den Status aus dem Maßnahmenplan */
+      tom:            t ? (t.status==='abgeschlossen' ? 'done' : (t.status==='in_bearbeitung'||(t.ist||[]).length) ? 'wip' : 'offen') : 'offen',
       dsfa:           stand(K.dsfa[v.id]),
     };
     const st={};
-    (t&&t.soll||[]).forEach(id=>{ st[id]=(t.ist||[]).includes(id)?'umgesetzt':'offen'; });
+    const istIds=(t&&t.ist||[]).map(x=>typeof x==='string'?x:x&&x.id);
+    (t&&t.soll||[]).map(x=>typeof x==='string'?x:x&&x.id).filter(Boolean).forEach(id=>{
+      st[id]=((t.umsetzung||{})[id]||{}).status || (istIds.includes(id)?'umgesetzt':'offen'); });
     TOM_STAND[v.id]=st;
   });
 }

@@ -3,6 +3,8 @@ KOOS Server – Router: Datenschutzkette
 
 GET /api/kette             → Übersicht über alle Verarbeitungstätigkeiten
 GET /api/kette/{vvt_id}    → alle Ketten-Dateien einer Verarbeitungstätigkeit
+PUT /api/kette/{vvt_id}/tom/umsetzung → Umsetzungsstand der Maßnahmen einer VVT
+PUT /api/kette/_baseline/umsetzung    → Umsetzungsstand der organisationsweiten Maßnahmen
 
 Warum es diesen Router gibt: Die Kette liegt seit dem 2026-08-07 als JSON je
 Verarbeitungstätigkeit im Datenverzeichnis, erzeugt von den Generatoren der
@@ -22,9 +24,12 @@ import json
 import re
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from datetime import date
+
+from fastapi import APIRouter, HTTPException, Request
 
 import config
+from services import git_service, parser
 
 router = APIRouter(prefix="/api/kette", tags=["Datenschutzkette"])
 
@@ -132,6 +137,7 @@ def get_uebersicht() -> dict:
             }
         if t:
             eintrag["tom"] = {
+                "bearbeitet": bool(t.get("bearbeitet")),
                 "status": t.get("status"),
                 "delta":  t.get("delta"),
                 "soll":   _ids(t.get("soll")),
@@ -177,3 +183,131 @@ def get_kette(vvt_id: str) -> dict:
                    f"Erwartet werden bes-{vvt_id}.json, risiko-{vvt_id}.json und weitere.",
         )
     return ergebnis
+
+
+# ── Umsetzungsstand der Maßnahmen (PLAN-2026-10-23, Stufe 4, TOM) ─────────────
+# Je Maßnahme: status (offen | in_bearbeitung | umgesetzt | nicht_anwendbar)
+# und notiz — die Planung aus DS-TOM. Daraus gerechnet: ist, delta, status
+# (tom-vvt) bzw. umsetzungsstatus (Baseline). Dieselbe Rechnung steht in
+# dsms-knowledge/scripts/kette_schutz.py; die Generatoren übernehmen den
+# Stand damit bei jedem Lauf. Das Feld `bearbeitet` markiert die Datei als in
+# Nexus gepflegt (Entscheidung „Bearbeitet = gesperrt“, Plan § 13).
+_UMSETZUNG_STATUS = ("offen", "in_bearbeitung", "umgesetzt", "nicht_anwendbar")
+
+
+def _umsetzung_uebernehmen(daten: dict, eingabe, erlaubt: list[str]) -> None:
+    if not isinstance(eingabe, dict) or not eingabe:
+        raise HTTPException(422, detail="massnahmen fehlt: {Maßnahmen-ID: {status, notiz}}")
+    unbekannt = [i for i in eingabe if i not in erlaubt]
+    if unbekannt:
+        raise HTTPException(422, detail=f"Nicht im Plan dieser Datei: {', '.join(unbekannt[:10])}")
+    um = dict(daten.get("umsetzung") or {})
+    for mid, e in eingabe.items():
+        if not isinstance(e, dict):
+            raise HTTPException(422, detail=f"{mid}: erwartet {{status, notiz}}")
+        st = e.get("status", "offen")
+        if st not in _UMSETZUNG_STATUS:
+            raise HTTPException(422, detail=f"{mid}: Status {st!r} unbekannt (erlaubt: {', '.join(_UMSETZUNG_STATUS)})")
+        notiz = (e.get("notiz") or "").strip()
+        if len(notiz) > 2000:
+            raise HTTPException(422, detail=f"{mid}: Notiz länger als 2000 Zeichen")
+        alt = um.get(mid) or {}
+        if st == "offen" and not notiz:
+            um.pop(mid, None)
+        elif alt.get("status") != st or (alt.get("notiz") or "") != notiz:
+            um[mid] = {"status": st, **({"notiz": notiz} if notiz else {}), "am": date.today().isoformat()}
+    daten["umsetzung"] = um
+
+
+def _tom_rechnen(daten: dict) -> None:
+    soll = _ids(daten.get("soll"))
+    um = daten.get("umsetzung") or {}
+    st = lambda i: (um.get(i) or {}).get("status", "offen")
+    daten["ist"] = [i for i in soll if st(i) == "umgesetzt"]
+    daten["delta"] = sum(1 for i in soll if st(i) not in ("umgesetzt", "nicht_anwendbar"))
+    # status: in Arbeit, sobald irgendeine Planzeile nicht mehr offen ist —
+    # auch eine zusätzlich empfohlene Maßnahme (ergänzende Analyse)
+    if not any((e or {}).get("status", "offen") != "offen" for e in um.values()):
+        daten["status"] = "offen"
+    else:
+        daten["status"] = "abgeschlossen" if daten["delta"] == 0 else "in_bearbeitung"
+
+
+def _baseline_rechnen(daten: dict) -> None:
+    ids = _ids(daten.get("toms"))
+    um = daten.get("umsetzung") or {}
+    st = lambda i: (um.get(i) or {}).get("status", "offen")
+    if not any(st(i) != "offen" for i in ids):
+        daten["umsetzungsstatus"] = "zu_pruefen"
+    elif all(st(i) in ("umgesetzt", "nicht_anwendbar") for i in ids):
+        daten["umsetzungsstatus"] = "umgesetzt"
+    else:
+        daten["umsetzungsstatus"] = "in_bearbeitung"
+
+
+def _bearbeitet(request: Request, vvt_id: str | None = None) -> dict:
+    """Wer, wann, und auf welchem Stand der VVT — damit Nexus später
+    erkennen kann, dass die Ableitung veraltet sein könnte."""
+    wer = request.headers.get("x-forwarded-user", "").strip() or \
+        ("lokal" if config.AUTH_MODUS == "aus" else "unbekannt")
+    b = {"am": date.today().isoformat(), "durch": wer}
+    if vvt_id:
+        vdatei = config.VVT_DIR / f"{vvt_id}.md"
+        if vdatei.exists():
+            v = parser.parse_vvt_md(vvt_id, vdatei.read_text(encoding="utf-8"))
+            b["vvt_stand"] = str(v.get("letzte_aktualisierung") or "")
+    return b
+
+
+def _umsetzung_speichern(datei: Path, daten: dict, eingabe, erlaubt, rechnen,
+                         request: Request, vvt_id: str | None, nachricht: str,
+                         begruendung: str | None) -> dict:
+    vorher = json.dumps(daten, ensure_ascii=False, sort_keys=True)
+    _umsetzung_uebernehmen(daten, eingabe, erlaubt)
+    rechnen(daten)
+    if json.dumps(daten, ensure_ascii=False, sort_keys=True) == vorher:
+        return {"ok": True, "gespeichert": False, "datei": daten}
+    daten["bearbeitet"] = _bearbeitet(request, vvt_id)
+    # Schreibweise wie die Generatoren (json.dump, indent 2, ohne Zeilenende)
+    datei.write_text(json.dumps(daten, indent=2, ensure_ascii=False), encoding="utf-8")
+    git_service.commit([datei], nachricht, begruendung=begruendung)
+    return {"ok": True, "gespeichert": True, "datei": daten}
+
+
+def _koerper_begruendung(koerper: dict) -> str | None:
+    b = koerper.get("_begruendung")
+    return b.strip() if isinstance(b, str) and b.strip() else None
+
+
+@router.put("/_baseline/umsetzung", summary="Umsetzungsstand der organisationsweiten Maßnahmen")
+async def put_baseline_umsetzung(request: Request) -> dict:
+    datei = config.DATA_DIR / BASELINE[0] / BASELINE[1]
+    daten = _lies(datei) if datei.exists() else None
+    if daten is None:
+        raise HTTPException(404, detail="baseline-organisation.json nicht gefunden")
+    koerper = await request.json()
+    return _umsetzung_speichern(datei, daten, koerper.get("massnahmen"), _ids(daten.get("toms")),
+                                _baseline_rechnen, request, None,
+                                "Baseline: Umsetzung organisationsweiter Maßnahmen aktualisiert",
+                                _koerper_begruendung(koerper))
+
+
+@router.put("/{vvt_id}/tom/umsetzung", summary="Umsetzungsstand der Maßnahmen einer VVT")
+async def put_tom_umsetzung(vvt_id: str, request: Request) -> dict:
+    if not _ID_RE.match(vvt_id):
+        raise HTTPException(400, detail=f"Ungültige Kennung: {vvt_id!r}")
+    datei = config.DATA_DIR / "tom" / f"tom-{vvt_id}.json"
+    daten = _lies(datei) if datei.exists() else None
+    if daten is None:
+        raise HTTPException(404, detail=f"tom-{vvt_id}.json nicht gefunden")
+    # Geplant werden die Soll-Maßnahmen und die zusätzlich empfohlenen
+    # Maßnahmen der ergänzenden Analyse (Schritt 7).
+    erg = config.DATA_DIR / "tom" / f"ergaenzend-{vvt_id}.json"
+    zusatz = _ids((_lies(erg) or {}).get("zusatz_toms")) if erg.exists() else []
+    erlaubt = _ids(daten.get("soll")) + [i for i in zusatz if i not in _ids(daten.get("soll"))]
+    koerper = await request.json()
+    return _umsetzung_speichern(datei, daten, koerper.get("massnahmen"), erlaubt,
+                                _tom_rechnen, request, vvt_id,
+                                f"TOM {vvt_id}: Umsetzung aktualisiert",
+                                _koerper_begruendung(koerper))
+

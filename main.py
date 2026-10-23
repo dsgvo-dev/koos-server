@@ -176,7 +176,8 @@ def get_audit(n: int = 50, pfad: str | None = None) -> list[dict]:
     """
     import re
     if pfad is not None and not re.match(
-        r"^(orga\.yaml|koos\.yaml|(prozesse|daten|regelungen|vvt)/[a-z0-9][a-z0-9\-]{0,126}\.md)$", pfad
+        r"^(orga\.yaml|koos\.yaml|(prozesse|daten|regelungen|vvt)/[a-z0-9][a-z0-9\-]{0,126}\.md"
+        r"|(besonderheiten|risikoanalyse|schwellwert|tom|dsfa|baseline)/[a-z0-9][a-z0-9\-]{0,126}\.json)$", pfad
     ):
         raise HTTPException(400, detail="Ungültiger Pfad")
     return git_service.log_lesen(n=min(n, 500), pfad=pfad)

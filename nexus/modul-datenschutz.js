@@ -307,12 +307,15 @@ function mTOM(){
     <div class="detail-id">${esc(v.uid)} · ${esc(v.titel)}</div>
     <div class="hinweis warn">Keine Datei <code>tom-${esc(v.id)}.json</code> vorhanden.
       Erfasst sind ${Object.keys(K.tom).length} von ${VVT.length} Verarbeitungstätigkeiten.</div></div>`;
-  const soll=t.soll||[], ist=t.ist||[], tab=S.tomTab, lim=S.limit.tomListe||60;
+  /* soll/ist führen je nach Generator Kennungen oder {id, name} */
+  const soll=tpIds(t.soll), ist=tpIds(t.ist), tab=S.tomTab, lim=S.limit.tomListe||60;
+  const plan=tpPlanVVT(v), basis=tpPlanBaseline();
   const quote=soll.length?Math.round(ist.length/soll.length*100):0;
   const tomById=id=>TOMS.find(x=>x.id===id)||{id,name:'(nicht im Katalog)',kat:'—',typ:'—'};
   return ketteSidebar()+`<div class="detail">
     <h2>TOM &amp; Gefahren</h2>
     <div class="detail-id">${esc(t.id)} · Stand ${esc(t.erstellt_am||'—')} · Status ${esc(t.status||'—')}</div>
+    ${t.bearbeitet&&t.bearbeitet.vvt_stand&&v.stand&&t.bearbeitet.vvt_stand!==v.stand?`<div class="hinweis warn">Die VVT wurde nach der letzten Bearbeitung des Plans geändert (Stand ${esc(v.stand)}, Plan auf Stand ${esc(t.bearbeitet.vvt_stand)}). Soll-Maßnahmen prüfen; neu abgeleitet werden sie beim nächsten Lauf von <code>kette_neu.sh</code>, der Umsetzungsstand bleibt dabei erhalten.</div>`:''}
     <div class="karten" style="margin-bottom:18px">
       <div class="karte"><div class="karte-zahl">${soll.length}</div><div class="karte-label">SOLL-Maßnahmen</div>
         <div class="karte-fuss">${esc(t.soll_herkunft||'')}</div></div>
@@ -340,23 +343,17 @@ function mTOM(){
     </div>`:''}
     <div class="sektion">
       <div style="display:flex;gap:6px;margin-bottom:12px">
-        <button class="btn klein${tab==='toms'?' primary':''}" data-tomtab="toms">⚙ SOLL-Maßnahmen (${soll.length})</button>
+        <button class="btn klein${tab==='toms'?' primary':''}" data-tomtab="toms">⚙ Maßnahmenplan (${plan.ids.length})</button>
+        <button class="btn klein${tab==='baseline'?' primary':''}" data-tomtab="baseline">🏢 Organisationsweit (${basis.ids.length})</button>
         <button class="btn klein${tab==='threats'?' primary':''}" data-tomtab="threats">🛡 Bedrohungen (${bed?(bed.threats||[]).length:0})</button>
         <button class="btn klein${tab==='graph'?' primary':''}" data-tomtab="graph">🕸 Graph</button>
       </div>
       ${tab==='graph'?tomGraph(bed?(bed.threats||[]):[], soll, ist):''}
-      ${tab==='graph'?'':tab==='toms'?`
-      <table class="tab">
-        <thead><tr><th style="width:120px">ID</th><th>Maßnahme</th><th style="width:70px">Kat.</th><th style="width:130px">Typ</th><th style="width:110px">IST</th></tr></thead>
-        <tbody>${soll.slice(0,lim).map(id=>{const m=tomById(id); const um=ist.includes(id);
-          return `<tr><td><code style="font-size:11px">${esc(id)}</code></td>
-            <td><b>${esc(m.name)}</b>${m.beschreibung?`<div style="color:var(--fg-faint);font-size:11.5px;margin-top:3px;line-height:1.45">${esc(String(m.beschreibung).slice(0,190))}</div>`:''}</td>
-            <td>${esc(m.kat||'—')}</td>
-            <td style="font-size:11.5px">${m.typ==='Grundmaßnahme'?'<span class="pill">Grund</span>':'<span class="pill info">verfahrensspez.</span>'}</td>
-            <td>${um?'<span class="pill ok">umgesetzt</span>':'<span class="pill warn">offen</span>'}</td></tr>`;}).join('')}
-        </tbody></table>
-        ${soll.length>lim?`<div style="margin-top:10px"><button class="btn klein" data-mehr="tomListe">Weitere ${soll.length-lim} anzeigen</button></div>`:''}`
-      :`
+      ${tab==='toms'?tpTabelle(plan.schluessel, plan.datei, plan.ids, plan.zusatz):''}
+      ${tab==='baseline'?`<div class="hinweis" style="margin-bottom:12px">Organisationsweite Grundmaßnahmen — einmal für die
+        ganze Organisation umgesetzt und an alle VVT vererbt. Stand gilt für alle Verarbeitungstätigkeiten.</div>
+        ${basis.datei?tpTabelle(basis.schluessel, basis.datei, basis.ids):'<p class="pf-text">Keine baseline-organisation.json geladen.</p>'}`:''}
+      ${tab==='graph'||tab==='toms'||tab==='baseline'?'':`
       <table class="tab">
         <thead><tr><th style="width:150px">ID</th><th>Bedrohung</th><th style="width:120px">Typ</th></tr></thead>
         <tbody>${bed?(bed.threats||[]).slice(0,lim).map(x=>`<tr>
