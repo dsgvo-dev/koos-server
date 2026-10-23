@@ -62,6 +62,7 @@ const PFLEGE = {
       {id:'schutzbedarf',        label:'Schutzbedarf (BSI)',        typ:'select', vokabular:'schutzbedarf', pflicht:true},
       {id:'vertraulichkeit',     label:'Vertraulichkeit',           typ:'select', vokabular:'vertraulichkeit', pflicht:true},
       {id:'rechtsgrundlagen',    label:'Rechtsgrundlagen',          typ:'list-rechtsgrundlage', hinweis:'Je Zeile eine Grundlage: Gesetz, Artikel, Titel'},
+      {id:'system',              label:'Fachverfahren / System',    typ:'text',   hinweis:'Software oder Fachverfahren, in dem die Daten geführt werden — wird von der Organisation gepflegt'},
       {id:'aufbewahrungFrist',   label:'Aufbewahrungsfrist',        typ:'text',   hinweis:'z. B. 10 Jahre'},
       {id:'aufbewahrungBeginn',  label:'Fristbeginn',               typ:'text',   hinweis:'z. B. nach Ausscheiden'},
       {id:'aufbewahrungHinweis', label:'Hinweis Aufbewahrung',      typ:'text'},

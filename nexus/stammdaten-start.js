@@ -42,9 +42,10 @@ function dqPruefungen(){
       {key:'d-bedarf',  titel:'Ohne Schutzbedarf',         liste:D.filter(d=>leer(d.schutzbedarf))},
       {key:'d-vt',      titel:'Ohne Vertraulichkeit',      liste:D.filter(d=>leer(d.vertraulichkeit))},
       {key:'d-frist',   titel:'Ohne Aufbewahrungsfrist',   liste:D.filter(d=>leer((d.aufbewahrung||{}).frist))},
-      /* Am 23.10.2026 bei allen 337 leer — als Punkt an jedem Eintrag sagte
-         das nichts mehr. Deshalb nur als Karte auf der Startseite. */
-      {key:'d-system',  titel:'Ohne Fachverfahren/System', nurKarte:true, liste:D.filter(d=>leer(d.system))},
+      /* Am 23.10.2026 bei allen 337 leer; pflegen die Kunden (Entscheidung
+         Martin, 23.10.2026). Als Punkt an jedem Eintrag sagte das nichts —
+         deshalb nur als Karte; im Detail steht „noch nicht gepflegt“. */
+      {key:'d-system',  titel:'Ohne Fachverfahren/System', hinweis:'Pflegen die Kunden über „Bearbeiten“', nurKarte:true, liste:D.filter(d=>leer(d.system))},
       {key:'d-verweis', titel:'Verweis ins Leere',         hinweis:'Zuständige OE fehlt im Bestand',
        liste:D.filter(d=>d.zustaendigeEinheit&&!oeIds.has(d.zustaendigeEinheit))},
     ],

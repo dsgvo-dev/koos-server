@@ -374,6 +374,7 @@ function ausApi(x){
         bsiA:f('bsi-verfuegbarkeit') ?? kl.verfuegbarkeit,
         bsiBedarf:f('bsi-schutzbedarf'),
         oe:d['zuständige-einheit']||d.zustaendigeEinheit,
+        system:d.system||null,
         frist:[au.frist,au.beginn&&('ab '+au.beginn)].filter(Boolean).join(', ')||'—',
         rg:((kl.rechtsgrundlagen ?? d.rechtsgrundlagen)||[]).map(r=>r&&r.gesetz).filter(Boolean).slice(0,3),
         art9wort:(such.match(art9re)||[null])[0],
