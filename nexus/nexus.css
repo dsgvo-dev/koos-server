@@ -48,6 +48,12 @@ button{font-family:inherit;color:inherit}
   padding:5px 8px;border:1px solid var(--line);border-radius:5px;
   background:var(--bg-alt);color:var(--fg);font-size:12px;cursor:pointer;
 }
+/* Mandant: aus der Adresse, nicht wählbar */
+#mandant{
+  padding:5px 10px;border:1px solid var(--line);border-radius:5px;
+  background:var(--bg-alt);color:var(--fg);font-size:12px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px;flex-shrink:0;
+}
 
 /* Kontext-Chip */
 #kontext-bar{display:flex;align-items:center;gap:8px;flex:1;min-width:0;overflow:hidden}
@@ -104,7 +110,7 @@ button{font-family:inherit;color:inherit}
 .icon-btn.on{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
 #user-chip{
   display:flex;align-items:center;gap:7px;padding:4px 10px 4px 5px;
-  border:1px solid var(--line);border-radius:20px;background:var(--bg-alt);font-size:12px;cursor:pointer;
+  border:1px solid var(--line);border-radius:20px;background:var(--bg-alt);font-size:12px;cursor:default;
 }
 #user-avatar{
   width:22px;height:22px;border-radius:50%;background:var(--accent);color:var(--accent-fg);

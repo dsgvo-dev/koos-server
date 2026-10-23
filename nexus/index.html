@@ -19,10 +19,7 @@
     </div>
   </div>
 
-  <select class="tb-select" id="mandant" aria-label="Mandant wählen">
-    <option>Kommunalverwaltung (Demo)</option>
-    <option>Samtgemeinde Musterland</option>
-  </select>
+  <div id="mandant" aria-label="Mandant">…</div>
 
   <div id="kontext-bar">
     <span id="kontext-leer" title="Der Assistent löst den Bezug sonst aus der Frage auf">Kein Vorgangskontext gesetzt — der Assistent löst ihn aus der Frage auf</span>
@@ -49,11 +46,11 @@
     <button class="icon-btn" id="btn-chat" title="Vollbild-Chatmodus (⌘K)" aria-label="Vollbild-Chatmodus">💬</button>
     <button class="icon-btn" id="btn-assist" title="Assistenzpanel ein-/ausblenden" aria-label="Assistenzpanel umschalten">◧</button>
     <button class="icon-btn" id="btn-dark" title="Dark Mode" aria-label="Dark Mode umschalten">🌙</button>
-    <div id="user-chip" title="Angemeldet">
-      <div id="user-avatar">MS</div>
+    <div id="user-chip" title="Anmeldung wird geprüft …">
+      <div id="user-avatar">–</div>
       <div>
-        <div>Martin S.</div>
-        <div id="user-rolle">DSB</div>
+        <div id="user-name">…</div>
+        <div id="user-rolle"></div>
       </div>
     </div>
   </div>
@@ -138,6 +135,7 @@
 
 <script src="nexus/kern-daten.js"></script>
 <script src="nexus/kern-oberflaeche.js"></script>
+<script src="nexus/kern-sitzung.js"></script>
 <script src="nexus/modul-stammdaten.js"></script>
 <script src="nexus/modul-datenschutz.js"></script>
 <script src="nexus/modul-auswertung.js"></script>
