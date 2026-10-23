@@ -10,7 +10,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 import config
@@ -88,6 +88,10 @@ async def no_cache_api(request: Request, call_next) -> Response:
     if request.url.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
         response.headers["Pragma"] = "no-cache"
+    elif request.url.path == "/" or request.url.path.startswith("/nexus/"):
+        # Oberfläche bei jedem Laden gegen ETag prüfen — nach einem Deployment
+        # sonst Mischstand aus alten und neuen Skriptdateien im Browser-Cache.
+        response.headers["Cache-Control"] = "no-cache"
     return response
 
 # ── Schreibschutz (PLAN-2026-09-30, Zwischenlösung bis ADR-016 Weg 1) ────────
@@ -213,43 +217,78 @@ def health() -> dict:
     }
 
 
-# ── Static Files (index.html) ────────────────────────────────────────────────
-# GUI-Datei: index.html aus Server-Verzeichnis (konfigurierbar via KOOS_GUI_PATH)
-# Alle nicht-API-Routen → index.html (Single-Page-App)
+# ── Oberflächen ──────────────────────────────────────────────────────────────
+# Nexus ist die Kundenansicht und Startseite (PLAN-2026-10-23, Stufe 1).
+# Die KOOS-Pflegeoberfläche (index.html, KOOS_GUI_PATH) bleibt bis zur Abnahme
+# von Nexus als Rückfall unter /pflege erreichbar (Entscheidung 2).
+# Beide Seiten rufen die API relativ auf ("api/…"); deshalb liegen sie direkt
+# unter der Wurzel und nicht in einem Unterpfad mit Schrägstrich am Ende.
 
 if config.STATIC_DIR.is_dir():
     app.mount("/static", StaticFiles(directory=str(config.STATIC_DIR)), name="static")
 
-# Nexus-Oberflaeche (Kundensicht): ausdrueckliche Route fuer genau diese eine
-# Datei. Das Server-Verzeichnis als Ganzes auszuliefern wuerde den Quelltext
-# offenlegen. Muss vor der Auffangroute stehen, sonst faengt diese sie ab.
-NEXUS_GUI: Path = Path(__file__).parent / "nexus-webui-prototyp.html"
+# Ausgeliefert wird nur der Ordner nexus/ (Entscheidung 3) — das
+# Server-Verzeichnis als Ganzes würde den Quelltext offenlegen.
+NEXUS_DIR: Path = (Path(__file__).parent / "nexus").resolve()
+NEXUS_START: Path = NEXUS_DIR / "index.html"
+_NEXUS_ENDUNGEN = {".html", ".css", ".js"}
+
+
+def _nexus_startseite() -> FileResponse:
+    if not NEXUS_START.is_file():
+        raise HTTPException(404, detail="Nexus-Oberfläche nicht gefunden")
+    return FileResponse(str(NEXUS_START))
+
+
+@app.get("/", include_in_schema=False)
+def root() -> FileResponse:
+    return _nexus_startseite()
 
 
 @app.get("/nexus", include_in_schema=False)
-def nexus() -> FileResponse:
-    """Nexus-Oberflaeche — genau diese eine Datei."""
-    if not NEXUS_GUI.is_file():
-        raise HTTPException(404, detail="Nexus-Oberfläche nicht gefunden")
-    return FileResponse(str(NEXUS_GUI))
+def nexus_alt() -> RedirectResponse:
+    """Frühere Adresse der Nexus-Oberfläche. Relativ weitergeleitet, damit
+    der Pfad hinter nginx (/koos/<kunde>/) erhalten bleibt."""
+    return RedirectResponse("./", status_code=301)
+
+
+@app.get("/nexus/", include_in_schema=False)
+def nexus_alt_ordner() -> RedirectResponse:
+    """Wie /nexus — sonst lüden die Skripte relativ aus /nexus/nexus/."""
+    return RedirectResponse("../", status_code=301)
+
+
+@app.get("/nexus/{datei}", include_in_schema=False)
+def nexus_datei(datei: str) -> FileResponse:
+    """Eine Datei aus nexus/ — keine Unterordner, nur HTML, CSS und JS."""
+    pfad = (NEXUS_DIR / datei).resolve()
+    if (
+        pfad.parent != NEXUS_DIR
+        or pfad.suffix not in _NEXUS_ENDUNGEN
+        or not pfad.is_file()
+    ):
+        raise HTTPException(404, detail="Nicht gefunden")
+    return FileResponse(str(pfad))
 
 
 if config.GUI_PATH.is_file():
-    @app.get("/", include_in_schema=False)
-    def root() -> FileResponse:
-        return FileResponse(str(config.GUI_PATH))
-
-    @app.get("/{pfad:path}", include_in_schema=False)
-    def catch_all(pfad: str) -> FileResponse:
-        """Alle anderen Pfade → index.html (für Client-side Routing)."""
-        datei = (config.STATIC_DIR / pfad).resolve()
-        # Riegel: nur Dateien unterhalb des Datenverzeichnisses ausliefern.
-        # Ohne ihn gibt ein Pfad mit '..' Dateien außerhalb davon heraus.
-        if datei.is_file() and datei.is_relative_to(config.STATIC_DIR.resolve()):
-            return FileResponse(str(datei))
+    @app.get("/pflege", include_in_schema=False)
+    def pflege() -> FileResponse:
+        """KOOS-Pflegeoberfläche als Rückfall (Entscheidung 2)."""
         return FileResponse(str(config.GUI_PATH))
 else:
-    log.warning("GUI_PATH nicht gefunden: %s — kein GUI-Serving", config.GUI_PATH)
+    log.warning("GUI_PATH nicht gefunden: %s — keine Pflegeoberfläche", config.GUI_PATH)
+
+
+@app.get("/{pfad:path}", include_in_schema=False)
+def catch_all(pfad: str) -> FileResponse:
+    """Dateien unterhalb des Datenverzeichnisses, sonst die Startseite."""
+    datei = (config.STATIC_DIR / pfad).resolve()
+    # Riegel: nur Dateien unterhalb des Datenverzeichnisses ausliefern.
+    # Ohne ihn gibt ein Pfad mit '..' Dateien außerhalb davon heraus.
+    if datei.is_file() and datei.is_relative_to(config.STATIC_DIR.resolve()):
+        return FileResponse(str(datei))
+    return _nexus_startseite()
 
 
 # ── Fehlerbehandlung ──────────────────────────────────────────────────────────

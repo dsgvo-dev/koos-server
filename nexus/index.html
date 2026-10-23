@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexus – Übergreifende Oberfläche (Prototyp)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<link rel="stylesheet" href="nexus/nexus.css">
+</head>
+<body>
+<!-- ══ TOPBAR ══════════════════════════════════════════════════════════ -->
+<div id="topbar">
+  <div id="brand">
+    <div id="brand-mark">N</div>
+    <div>
+      <div id="brand-name">Nexus</div>
+      <div id="brand-sub">Organisation &amp; Datenschutz</div>
+    </div>
+  </div>
+
+  <select class="tb-select" id="mandant" aria-label="Mandant wählen">
+    <option>Kommunalverwaltung (Demo)</option>
+    <option>Samtgemeinde Musterland</option>
+  </select>
+
+  <div id="kontext-bar">
+    <span id="kontext-leer" title="Der Assistent löst den Bezug sonst aus der Frage auf">Kein Vorgangskontext gesetzt — der Assistent löst ihn aus der Frage auf</span>
+    <span class="kchip" id="kontext-chip" hidden>
+      <b id="kchip-typ"></b>
+      <span class="kchip-sub" id="kchip-text"></span>
+      <button class="kchip-x" id="kchip-x" title="Kontext lösen" aria-label="Kontext lösen">✕</button>
+    </span>
+  </div>
+
+  <div id="topbar-right">
+    <div id="datenstand-wrap">
+      <span id="datenstand" class="laedt" title="Datenquelle">⏳ Lädt …</span>
+      <button class="icon-btn" id="btn-ordner" title="KOOS-Datenordner öffnen und direkt lesen" aria-label="Ordner öffnen">📂</button>
+      <button class="icon-btn" id="btn-reload" title="Daten neu laden" aria-label="Daten neu laden">⟳</button>
+      <button class="icon-btn admin-btn" id="btn-cache-refresh" title="Parser-Cache leeren (nach manuellen Dateiänderungen)" aria-label="Cache leeren">🧹</button>
+      <button class="icon-btn admin-btn" id="btn-reindex" title="Semantischen Suchindex neu aufbauen (nach Batch-Import)" aria-label="Index neu bauen">🏗️</button>
+    </div>
+    <div id="search-wrap">
+      <input id="search" type="search" placeholder="Alles durchsuchen …" autocomplete="off"
+             aria-label="Organisation, Prozesse, Daten, VVT und TOM durchsuchen">
+      <div id="search-results" role="listbox" aria-label="Suchergebnisse"></div>
+    </div>
+    <button class="icon-btn" id="btn-chat" title="Vollbild-Chatmodus (⌘K)" aria-label="Vollbild-Chatmodus">💬</button>
+    <button class="icon-btn" id="btn-assist" title="Assistenzpanel ein-/ausblenden" aria-label="Assistenzpanel umschalten">◧</button>
+    <button class="icon-btn" id="btn-dark" title="Dark Mode" aria-label="Dark Mode umschalten">🌙</button>
+    <div id="user-chip" title="Angemeldet">
+      <div id="user-avatar">MS</div>
+      <div>
+        <div>Martin S.</div>
+        <div id="user-rolle">DSB</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SHELL ═══════════════════════════════════════════════════════════ -->
+<div id="shell">
+
+  <!-- ── Modul-Rail ── -->
+  <nav id="rail" aria-label="Module">
+    <div id="rail-scroll"></div>
+    <div id="rail-foot">
+      <button id="rail-toggle" title="Leiste ein-/ausklappen" aria-label="Modulleiste umschalten">⟨⟩</button>
+    </div>
+  </nav>
+
+  <!-- ── Arbeitsbereich ── -->
+  <main id="work"></main>
+
+  <!-- ── Assistenzpanel ── -->
+  <aside id="assist" aria-label="KI-Assistent">
+    <div id="assist-kopf">
+      <span id="assist-dot" aria-hidden="true"></span>
+      <span id="assist-titel">KI-Assistent</span>
+      <button class="mini-btn" id="assist-voll" title="Vollbild-Chatmodus" aria-label="Auf Vollbild vergrößern">⤢</button>
+      <button class="mini-btn" id="assist-leeren" title="Verlauf leeren" aria-label="Verlauf leeren">⟲</button>
+      <button class="mini-btn" id="assist-zu" title="Panel schließen" aria-label="Panel schließen">✕</button>
+    </div>
+    <div id="assist-kontext"></div>
+    <div id="verlauf" aria-live="polite"></div>
+    <div id="vorschlaege"></div>
+    <div id="modell-bar">
+      <span>Modell</span>
+      <select id="modell-select" aria-label="Modell wählen">
+        <optgroup label="Ollama (lokal, ohne Tools)">
+          <option value="qwen3:14b">qwen3:14b</option>
+          <option value="llama3.1:8b">llama3.1:8b</option>
+          <option value="mistral-nemo:12b">mistral-nemo:12b</option>
+        </optgroup>
+        <optgroup label="Hermes-Gateway (MCP, Tool-Calling)">
+          <option value="hermes" selected>hermes · dsms + koos</option>
+        </optgroup>
+      </select>
+    </div>
+    <div id="eingabe-bereich">
+      <textarea id="eingabe" rows="1" placeholder="Frage eingeben …" aria-label="Nachricht an den KI-Assistenten"></textarea>
+      <button id="senden" aria-label="Nachricht senden">↑</button>
+    </div>
+  </aside>
+</div>
+
+<!-- ══ VOLLBILD-CHAT ═══════════════════════════════════════════════════ -->
+<div id="vollchat" role="dialog" aria-modal="true" aria-label="Vollbild-Chatmodus">
+  <div id="vc-kopf">
+    <div id="vc-titel"><span id="vc-dot" style="width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block"></span> KI-Chatmodus</div>
+    <select class="tb-select" id="vc-modell" aria-label="Modell wählen"></select>
+    <button class="icon-btn" id="vc-zu" title="Schließen (Esc)" aria-label="Chatmodus schließen">✕</button>
+  </div>
+  <div id="vc-body">
+    <div id="vc-threads">
+      <div class="liste-kopf">
+        <div><p>Gespräche</p></div>
+        <button class="btn-neu" id="vc-neu">+ Neu</button>
+      </div>
+      <div id="vc-thread-liste"></div>
+    </div>
+    <div id="vc-mitte">
+      <div id="vc-kontext"></div>
+      <div id="vc-verlauf"></div>
+      <div id="vc-eingabe-wrap">
+        <div id="vc-eingabe-box">
+          <textarea id="vc-eingabe" rows="1" placeholder="Frage an Organisation, VVT, Risiko, TOM und Methodik …" aria-label="Nachricht"></textarea>
+          <button id="vc-senden" aria-label="Senden">↑</button>
+        </div>
+        <div id="vc-fuss">Lokales Modell · Antworten mit Quellenangabe · Änderungsvorschläge werden erst nach Bestätigung im Modul gespeichert</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script src="nexus/kern-daten.js"></script>
+<script src="nexus/kern-oberflaeche.js"></script>
+<script src="nexus/modul-stammdaten.js"></script>
+<script src="nexus/modul-datenschutz.js"></script>
+<script src="nexus/modul-auswertung.js"></script>
+<script src="nexus/modul-system.js"></script>
+<script src="nexus/assistent.js"></script>
+<script src="nexus/ereignisse.js"></script>
+
+</body>
+</html>
