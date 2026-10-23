@@ -690,3 +690,4 @@ body.assist-zu #assist{display:none}
 .tp-status.ok{border-color:var(--ok);color:var(--ok)}
 .tp-status.warn{border-color:var(--warn);color:var(--warn)}
 .tp-status.unbekannt{color:var(--fg-faint)}
+.tp-statistik .pill[data-tpherkunft]{cursor:pointer}

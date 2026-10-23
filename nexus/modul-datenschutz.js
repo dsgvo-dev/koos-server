@@ -349,7 +349,7 @@ function mTOM(){
         <button class="btn klein${tab==='graph'?' primary':''}" data-tomtab="graph">🕸 Graph</button>
       </div>
       ${tab==='graph'?tomGraph(bed?(bed.threats||[]):[], soll, ist):''}
-      ${tab==='toms'?tpTabelle(plan.schluessel, plan.datei, plan.ids, plan.zusatz):''}
+      ${tab==='toms'?tpTabelle(plan.schluessel, plan.datei, plan.ids, plan.zusatz, plan.herkunft):''}
       ${tab==='baseline'?`<div class="hinweis" style="margin-bottom:12px">Organisationsweite Grundmaßnahmen — einmal für die
         ganze Organisation umgesetzt und an alle VVT vererbt. Stand gilt für alle Verarbeitungstätigkeiten.</div>
         ${basis.datei?tpTabelle(basis.schluessel, basis.datei, basis.ids):'<p class="pf-text">Keine baseline-organisation.json geladen.</p>'}`:''}

@@ -24,7 +24,7 @@ const TP_CLS = Object.fromEntries(TP_STATUS.map(([k,,c])=>[k,c]));
 const TP_ORDNUNG = {offen:0, in_bearbeitung:1, umgesetzt:2, nicht_anwendbar:3};
 
 /* Entwurf je Plan: schluessel ('vvt:<id>' | 'baseline') → {id: {status, notiz}} */
-const TP = {entwurf:{}, filter:'', sort:'id'};
+const TP = {entwurf:{}, filter:'', herkunft:'', sort:'id'};
 
 const tpIds = l => (l||[]).map(x=>typeof x==='string'?x:(x&&x.id)).filter(Boolean);
 const tpKatalog = id => TOMS.find(x=>x.id===id) || {id, name:'(nicht im Katalog)', kat:'—'};
@@ -39,7 +39,7 @@ function tpStand(schluessel, datei, id){
 function tpGeaendert(schluessel){ return Object.keys(TP.entwurf[schluessel]||{}).length; }
 
 /* Statistik wie in DS-TOM (renderStats) */
-function tpStatistik(schluessel, datei, ids){
+function tpStatistik(schluessel, datei, ids, herkunft={}){
   const n={offen:0,in_bearbeitung:0,umgesetzt:0,nicht_anwendbar:0};
   ids.forEach(id=>n[tpStand(schluessel,datei,id).status]++);
   const relevant=ids.length-n.nicht_anwendbar;
@@ -49,21 +49,24 @@ function tpStatistik(schluessel, datei, ids){
       <div class="balken"><i class="ok" style="width:${quote}%"></i></div></div>
     <div class="pill-reihe">${TP_STATUS.map(([k,l,c])=>`<span class="pill ${c}${TP.filter===k?' tp-aktiv':''}" data-tpfilter="${k}" role="button" tabindex="0">${l}: ${n[k]}</span>`).join('')}
       ${TP.filter?'<span class="pill link" data-tpfilter="">alle zeigen</span>':''}</div>
+    ${Object.keys(herkunft).length?`<div class="pill-reihe" title="Herkunft im Soll (Entscheidung 23.10.2026): Klassifikation, ergänzt um Empfehlungen der anwendbaren Bedrohungen">
+      ${[['klassifikation','Klassifikation'],['bedrohung','aus Bedrohungen']].map(([k,l])=>`<span class="pill${TP.herkunft===k?' tp-aktiv':''}" data-tpherkunft="${k}" role="button" tabindex="0">${l}: ${ids.filter(id=>herkunft[id]===k).length}</span>`).join('')}</div>`:''}
   </div>`;
 }
 
 /* Der Plan als Tabelle. ids: geplante Maßnahmen; zusatz: Teilmenge aus Schritt 7 */
-function tpTabelle(schluessel, datei, ids, zusatz=[]){
+function tpTabelle(schluessel, datei, ids, zusatz=[], herkunft={}){
   const darf=typeof darfPflegen==='function' && darfPflegen();
   if(datei && datei._uebersicht) return '<p class="pf-text">Plan wird geladen …</p>';
-  let zeilen=ids.map(id=>({id, k:tpKatalog(id), s:tpStand(schluessel,datei,id), zusatz:zusatz.includes(id)}));
+  let zeilen=ids.map(id=>({id, k:tpKatalog(id), s:tpStand(schluessel,datei,id), zusatz:zusatz.includes(id), herkunft:herkunft[id]}));
   if(TP.filter) zeilen=zeilen.filter(z=>z.s.status===TP.filter);
+  if(TP.herkunft) zeilen=zeilen.filter(z=>z.herkunft===TP.herkunft);
   zeilen.sort((a,b)=> TP.sort==='status' ? (TP_ORDNUNG[a.s.status]-TP_ORDNUNG[b.s.status])||a.id.localeCompare(b.id)
                   : TP.sort==='wirkung' ? ((+b.k.wirkung||0)-(+a.k.wirkung||0))||a.id.localeCompare(b.id)
                   : a.id.localeCompare(b.id));
   const geaendert=tpGeaendert(schluessel);
   const b=datei&&datei.bearbeitet;
-  return `${tpStatistik(schluessel, datei, ids)}
+  return `${tpStatistik(schluessel, datei, ids, herkunft)}
   <div class="tp-leiste">
     <label>Sortierung <select class="tb-select" data-tpsort>
       ${[['id','Kennung'],['status','Status'],['wirkung','Wirkung ↓']].map(([k,l])=>`<option value="${k}"${TP.sort===k?' selected':''}>${l}</option>`).join('')}</select></label>
@@ -81,7 +84,7 @@ function tpTabelle(schluessel, datei, ids, zusatz=[]){
     <tbody>${zeilen.map(z=>{
       const ent=!!(TP.entwurf[schluessel]||{})[z.id];
       return `<tr class="${ent?'tp-entwurf':''}">
-        <td><code style="font-size:11px">${esc(z.id)}</code>${z.zusatz?'<div><span class="pill info" title="Zusätzlich empfohlen aus der ergänzenden Analyse (Schritt 7)">zusätzlich</span></div>':''}</td>
+        <td><code style="font-size:11px">${esc(z.id)}</code>${z.herkunft==='bedrohung'?'<div><span class="pill" title="Empfohlen von einer anwendbaren Bedrohung — Ergänzung zur Klassifikation. Passt sie nicht, auf „nicht anwendbar“ setzen.">Bedrohung</span></div>':''}${z.zusatz?'<div><span class="pill info" title="Zusätzlich empfohlen aus der ergänzenden Analyse (Schritt 7)">zusätzlich</span></div>':''}</td>
         <td><b>${esc(z.k.name)}</b>${z.k.beschreibung?`<div class="tp-beschreibung">${esc(String(z.k.beschreibung).slice(0,220))}</div>`:''}</td>
         <td>${esc(z.k.kat||'—')}</td>
         <td class="num">${esc(z.k.wirkung??'—')}</td>
@@ -97,7 +100,8 @@ function tpTabelle(schluessel, datei, ids, zusatz=[]){
 function tpPlanVVT(v){
   const t=K.tom[v.id], erg=K.ergaenzend[v.id];
   const soll=tpIds(t&&t.soll), zusatz=tpIds(erg&&erg.zusatz_toms).filter(id=>!soll.includes(id));
-  return {schluessel:'vvt:'+v.id, datei:t, ids:[...soll,...zusatz], zusatz,
+  const herkunft=Object.fromEntries(((t&&t.soll)||[]).filter(x=>x&&typeof x==='object'&&x.herkunft).map(x=>[x.id,x.herkunft]));
+  return {schluessel:'vvt:'+v.id, datei:t, ids:[...soll,...zusatz], zusatz, herkunft,
           url:`api/kette/${encodeURIComponent(v.id)}/tom/umsetzung`, pfad:`tom/tom-${v.id}.json`,
           titel:`Maßnahmenplan ${v.uid} ${v.titel}`};
 }
@@ -176,6 +180,7 @@ document.addEventListener('input', e=>{
 document.addEventListener('click', e=>{
   const t=e.target;
   const f=t.closest('[data-tpfilter]'); if(f){ TP.filter=TP.filter===f.dataset.tpfilter?'':f.dataset.tpfilter; renderModul(); return; }
+  const hk=t.closest('[data-tpherkunft]'); if(hk){ TP.herkunft=TP.herkunft===hk.dataset.tpherkunft?'':hk.dataset.tpherkunft; renderModul(); return; }
   const a=t.closest('[data-tpalle]');
   if(a){ const s=a.dataset.tpalle, plan=tpPlan(s); if(!plan) return;
     plan.ids.forEach(id=>{ if(tpStand(s,plan.datei,id).status==='offen') tpSetzen(s,id,'status','umgesetzt'); });
@@ -189,7 +194,7 @@ document.addEventListener('click', e=>{
     pfVerlauf('tp:'+plan.schluessel, plan.titel); }
 });
 document.addEventListener('keydown', e=>{
-  if((e.key==='Enter'||e.key===' ') && e.target.matches && e.target.matches('[data-tpfilter]')){ e.preventDefault(); e.target.click(); }
+  if((e.key==='Enter'||e.key===' ') && e.target.matches && e.target.matches('[data-tpfilter],[data-tpherkunft]')){ e.preventDefault(); e.target.click(); }
 });
 /* Ungespeicherten Entwurf nicht still verlieren */
 window.addEventListener('beforeunload', e=>{
