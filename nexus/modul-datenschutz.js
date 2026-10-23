@@ -4,29 +4,35 @@ function mVVT(){
   const stufeCls={A:'',B:'',C:'warn',D:'err',E:'err'};
   return `
   <div class="liste">
-    <div class="liste-kopf"><div><p>Verarbeitungstätigkeiten</p><span>${filtern('vvt',VVT,x=>x.titel+' '+x.uid+' '+oeName(x.oe)).treffer.length} von ${VVT.length} · Art. 30 DSGVO</span></div>
-      <button class="btn-neu">+ Neu</button></div>
+    <div class="liste-kopf"><div><p>Verarbeitungstätigkeiten</p><span>${filtern('vvt',lfAnwenden('vvt',VVT),x=>x.titel+' '+x.uid+' '+oeName(x.oe)).treffer.length} von ${VVT.length} · Art. 30 DSGVO</span></div>
+      <span class="kopf-knoepfe">${uebersichtKnopf('vvt')}${pflegeNeuKnopf('vvt')}</span></div>
     <div class="liste-suche"><input type="search" placeholder="VVT durchsuchen …" data-filter="vvt" value="${esc(S.filter.vvt)}"></div>
-    <div class="liste-scroll">${(()=>{const g=filtern('vvt',VVT,x=>x.titel+' '+x.uid+' '+oeName(x.oe));return g.sichtbar.map(x=>{
+    ${lfBalken('vvt')}
+    <div class="liste-scroll">${(()=>{const g=filtern('vvt',lfAnwenden('vvt',VVT),x=>x.titel+' '+x.uid+' '+oeName(x.oe));return g.sichtbar.map(x=>{
       const k=KETTE[x.id]||{}, fertig=Object.values(k).filter(s=>s==='done').length;
       const st=schutzstufe(x);
       return `<div class="li${x.id===sel?' active':''}" data-vt="${x.id}">
         <div class="li-txt"><div class="li-name">${esc(x.titel)}</div>
-        <div class="li-sub"><code style="font-size:10.5px">${x.uid}</code>
+        <div class="li-sub">${dqPunkt(x.id)}<code style="font-size:10.5px">${x.uid}</code>
           <span>${esc(oeName(x.oe))}</span>
           ${st?`<span class="pill ${stufeCls[st]||''}">${st}</span>`:'<span class="pill err">ohne Stufe</span>'}
           <span class="pill ${fertig===4?'ok':fertig?'warn':''}">${fertig}/4</span></div></div>
       </div>`;}).join('')+mehrBtn('vvt',g);})()||'<div class="leer-hinweis" style="padding:26px">Keine Treffer</div>'}</div>
   </div>
   <div class="detail">
-    ${!v?'<div class="leer-hinweis">Verarbeitungstätigkeit auswählen — die Auswahl gilt anschließend in allen Datenschutzmodulen</div>':`
+    ${!v?startseite('vvt'):`
     <h2>${esc(v.titel)}</h2>
     <div class="detail-id">${v.id} · UID ${esc(v.uid)} · ${esc(oeName(v.oe))} · Status ${esc(v.status||'—')} · Bereich ${vvtBereich(v)||'—'}${v.stand?' · Stand '+esc(v.stand):''}</div>
     <div class="aktionsleiste" style="margin:0 0 20px;padding:0;border:none">
       <button class="btn klein primary" data-go="besonderheiten:">Kette fortsetzen →</button>
       <button class="btn klein" data-frage="Ist die Rechtsgrundlage für ${v.titel.replace(/"/g,'')} tragfähig?">Rechtsgrundlage prüfen lassen</button>
       <button class="btn klein" data-go="berichte:">Bericht erzeugen</button>
+      ${pflegeKnoepfe('vvt',v.id)}
     </div>
+    ${(()=>{ const w=vvtVerwaist(v.id); return w.length?`<div class="hinweis warn"><b>Referenzprüfung:</b> ${w.length}
+      Verweis${w.length===1?'':'e'} ins Leere — ${w.map(([a,id])=>`${esc(a)} <code>${esc(id)}</code>`).join(', ')}.
+      Der Server lehnt das Speichern ab, bis sie entfernt sind oder bewusst trotzdem gespeichert wird.</div>`:''; })()}
+    ${dqHinweis(v.id)}
     ${schutzstufe(v)?`<div class="hinweis">Abgeleitete Schutzstufe: <b>${schutzstufe(v)}</b>
        (Maximum über ${(v.dstores||[]).length} verknüpfte Datenspeicher)${hatArt9(v)?' · <b>Art. 9 DSGVO betroffen</b>':''}</div>`
       :`<div class="hinweis warn">Keine Schutzstufe ableitbar — es ist kein Datenspeicher verknüpft.
@@ -44,21 +50,51 @@ function mVVT(){
       </div></div>
     <div class="sektion"><div class="sektion-label">Verknüpft</div>
       <div class="feld"><div class="feld-label">Prozesse</div><div class="pill-reihe" style="margin-top:4px">
-        ${(v.prozesse||[]).map(p=>`<span class="pill link" data-go="prozesse:${p}">${esc((procById(p)||{}).name||p)}</span>`).join('')||'—'}</div></div>
+        ${(v.prozesse||[]).map(p=>procById(p)?`<span class="pill link" data-go="prozesse:${p}">${esc(procById(p).name)}</span>`
+            :`<span class="pill err" title="Diesen Prozess gibt es im Bestand nicht">${esc(p)} — fehlt</span>`).join('')||'—'}</div></div>
       <div class="feld" style="margin-top:12px"><div class="feld-label">Datenspeicher</div><div class="pill-reihe" style="margin-top:4px">
-        ${(v.dstores||[]).map(d=>`<span class="pill link" data-go="datenspeicher:${d}">${esc((dsById(d)||{}).name||d)} · ${(dsById(d)||{}).schutz}</span>`).join('')||'—'}</div></div>
+        ${(v.dstores||[]).map(d=>dsById(d)?`<span class="pill link" data-go="datenspeicher:${d}">${esc(dsById(d).name)} · ${dsById(d).schutz||'?'}</span>`
+            :`<span class="pill err" title="Diesen Datenspeicher gibt es im Bestand nicht">${esc(d)} — fehlt</span>`).join('')||'—'}</div></div>
       <div class="feld" style="margin-top:12px"><div class="feld-label">Organisationseinheit</div><div class="pill-reihe" style="margin-top:4px">
         <span class="pill link" data-go="organisation:${v.oe}">${esc(oeName(v.oe))}</span></div></div>
     </div>
-    <div class="sektion"><div class="sektion-label">Bearbeitungsstand der Datenschutzkette</div>
-      <div class="pill-reihe">
-        ${['besonderheiten','schwellenwert','risiko','tom'].map(k=>{
-          const st=(KETTE[v.id]||{})[k]||'offen';
-          const cls=st==='done'?'ok':st==='wip'?'warn':st==='unbekannt'?'unbekannt':'';
-          return `<span class="pill ${cls} link" data-go="${k}:">${MODUL_NAME[k]} — ${STAND_PILL[st][1]}</span>`;}).join('')}
-      </div></div>
+    <div class="sektion"><div class="sektion-label">Datenschutzkette</div>
+      ${vvtKette(v)}</div>
     `}
   </div>`;
+}
+
+/* Datenschutzkette einer VVT (Stufe 3): alle sieben Dateien je VVT mit
+   Stand. Die Kette erzeugen die Generatoren aus VVT, Datenspeichern und
+   Prozessen (deploy/kette_neu.sh); nach Änderungen daran ist sie neu zu
+   erzeugen — die Maske tut das nicht. */
+function vvtKette(v){
+  const glieder=[
+    ['bes','Besonderheiten','besonderheiten','besonderheiten'],
+    ['schwellwert','Schwellwertanalyse','schwellenwert','schwellwert'],
+    ['risiko','Risikoanalyse','risiko','risiko'],
+    ['bedrohungen','Bedrohungen','tom',null],
+    ['tom','TOM (Soll/Ist)','tom','tom'],
+    ['ergaenzend','Ergänzende Analyse','tom',null],
+    ['dsfa','DSFA','dsfa','dsfa'],
+  ];
+  const k=KETTE[v.id]||{};
+  const zeilen=glieder.map(([z,name,modul,stand])=>{
+    const da=!!(K[z]&&K[z][v.id]);
+    const st=stand?k[stand]:null;
+    /* DSFA nur bei DSFA-Pflicht (Schwellwert), ergänzende Analyse nur bei
+       Schutzbedarf über normal (Risiko) — Regel wie in kette_neu.sh */
+    const noetig = z==='dsfa' ? !!((K.schwellwert[v.id]||{}).dsfa_pflicht_gesamt)
+                 : z==='ergaenzend' ? String(((K.risiko[v.id]||{}).basis_risiko||{}).schutzbedarf||'normal').toLowerCase()!=='normal'
+                 : true;
+    const pill=!da ? (noetig ? '<span class="pill err">fehlt</span>' : '<span class="pill">nicht erforderlich</span>')
+      : st ? `<span class="pill ${st==='done'?'ok':st==='wip'?'warn':''}">${STAND_PILL[st][1]}</span>` : '<span class="pill ok">vorhanden</span>';
+    return `<tr><td><span class="link" data-go="${modul}:">${esc(name)}</span></td><td>${pill}</td></tr>`;
+  }).join('');
+  return `<table class="tab" style="max-width:560px"><tbody>${zeilen}</tbody></table>
+    <div class="pf-hinweis" style="margin-top:8px">Die Kette wird aus VVT, Datenspeichern und Prozessen erzeugt
+      (<code>kette_neu.sh</code>). Nach Änderungen an Datenspeichern oder Prozessen dieser VVT ist sie neu zu erzeugen.
+      DSFA und ergänzende Analyse entstehen nur bei Bedarf (DSFA-Pflicht bzw. Schutzbedarf über normal).</div>`;
 }
 
 /* ── Ketten-Sidebar (für Besonderheiten/Schwellenwert/Risiko/TOM) ──── */

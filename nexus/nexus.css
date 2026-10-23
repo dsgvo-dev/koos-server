@@ -670,3 +670,4 @@ body.assist-zu #assist{display:none}
 .dq-liste .link:hover{text-decoration:underline}
 .dq-gut{font-size:12px;color:var(--ok);margin-top:6px}
 @media (max-width:640px){ .st-label{width:110px} }
+.tab .link{cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}

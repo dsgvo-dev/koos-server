@@ -25,7 +25,9 @@ function dqPruefungen(){
   const regIds=new Set(ROH.regelungen.map(r=>r.id));
   const dsVonP=p=>((p.daten||{}).datenspeicher||[]).map(e=>typeof e==='string'?e:(e&&e.id)).filter(Boolean);
   const genutzt=new Set(ROH.prozesse.flatMap(dsVonP));
-  const P=ROH.prozesse, D=ROH.daten, R=ROH.regelungen;
+  const P=ROH.prozesse, D=ROH.daten, R=ROH.regelungen, V=ROH.vvt;
+  const procIds=new Set(P.map(p=>p.id));
+  const idsVon=l=>(l||[]).map(e=>typeof e==='string'?e:(e&&e.id)).filter(Boolean);
   _dq={
     prozesse:[
       {key:'p-oe',      titel:'Ohne zuständige OE',    liste:P.filter(p=>leer(p.zustaendigeEinheit))},
@@ -49,13 +51,26 @@ function dqPruefungen(){
       {key:'d-verweis', titel:'Verweis ins Leere',         hinweis:'Zuständige OE fehlt im Bestand',
        liste:D.filter(d=>d.zustaendigeEinheit&&!oeIds.has(d.zustaendigeEinheit))},
     ],
+    /* VVT (Stufe 3): Referenzprüfung wie GET /api/vvt/_validierung/alle
+       (Prozesse, Datenspeicher), dazu die OE; Vollständigkeit nach Art. 30. */
+    vvt:[
+      {key:'v-verweis', titel:'Verweis ins Leere', hinweis:'Prozess, Datenspeicher oder OE fehlt im Bestand — der Server lehnt das Speichern ab',
+       liste:V.filter(v=>idsVon(v.prozesse).some(id=>!procIds.has(id)) || idsVon(v.datenspeicher).some(id=>!dsIds.has(id))
+                      || (v.organisationseinheit&&!oeIds.has(v.organisationseinheit)))},
+      {key:'v-prozess', titel:'Ohne Prozess',           liste:V.filter(v=>!idsVon(v.prozesse).length)},
+      {key:'v-ds',      titel:'Ohne Datenspeicher',     hinweis:'Keine Schutzstufe ableitbar', liste:V.filter(v=>!idsVon(v.datenspeicher).length)},
+      {key:'v-rg',      titel:'Ohne Rechtsgrundlage',   liste:V.filter(v=>leer(v.rechtsgrundlage))},
+      {key:'v-frist',   titel:'Ohne Löschfrist',        liste:V.filter(v=>leer(v.loeschfrist))},
+      {key:'v-kette',   titel:'Kette unvollständig',    hinweis:'Besonderheiten, Schwellwert, Risiko oder TOM fehlt',
+       liste:V.filter(v=>!K.bes[v.id]||!K.schwellwert[v.id]||!K.risiko[v.id]||!K.tom[v.id])},
+    ],
     regelungen:[
       {key:'r-verweis', titel:'Verweis ins Leere', hinweis:'Zuständige OE oder Nachfolgeregelung fehlt im Bestand',
        liste:R.filter(r=>(r.zustaendigeEinheit&&!oeIds.has(r.zustaendigeEinheit))||(r.ersetzt&&!regIds.has(r.ersetzt)))},
     ],
     luecken:{},
   };
-  for(const gruppe of ['prozesse','datenspeicher','regelungen'])
+  for(const gruppe of ['prozesse','datenspeicher','regelungen','vvt'])
     _dq[gruppe].filter(p=>!p.nurKarte).forEach(p=>p.liste.forEach(x=>(_dq.luecken[x.id]=_dq.luecken[x.id]||[]).push(p.titel)));
   _dqRoh=ROH;
   return _dq;
@@ -140,7 +155,7 @@ function stHero(ico, titel, text){
 /* ── Startseiten ───────────────────────────────────────────────────── */
 function startseite(modul){
   const f={organisation:startOrganisation, prozesse:startProzesse,
-           datenspeicher:startDatenspeicher, regelungen:startRegelungen}[modul];
+           datenspeicher:startDatenspeicher, regelungen:startRegelungen, vvt:startVVT}[modul];
   return `<div class="st">${f?f():''}</div>`;
 }
 
@@ -217,6 +232,39 @@ function startRegelungen(){
     <div class="karten">${stKachel(REGELUNGEN.length,'Regelungen')}${stKachel(typ.length,'Typen')}</div>
     <div class="st-raster">${stVerteilung('Typ', typ)}${stVerteilung('Status', status)}</div>
     ${stPruefungen('regelungen', dq&&dq.regelungen, REGELUNGEN.length, x=>x.name||x.id)}`;
+}
+
+function startVVT(){
+  const dq=dqPruefungen();
+  const status=stZaehlen(VVT,v=>v.status).sort((a,b)=>b[1]-a[1]);
+  const jeOE=stZaehlen(VVT,v=>v.oe).sort((a,b)=>b[1]-a[1]);
+  const rest=jeOE.slice(10).reduce((s,[,n])=>s+n,0);
+  const stufe=stZaehlen(VVT,v=>schutzstufe(v)).sort((a,b)=>String(a[0]).localeCompare(String(b[0])));
+  const komplett=VVT.filter(v=>K.bes[v.id]&&K.schwellwert[v.id]&&K.risiko[v.id]&&K.tom[v.id]).length;
+  return `${stHero('📑','Verzeichnis von Verarbeitungstätigkeiten','Art. 30 DSGVO. Eine VVT links wählen — die Auswahl gilt anschließend in allen Datenschutzmodulen. Zeilen anklicken filtert die Liste.')}
+    <div class="karten">${stKachel(VVT.length,'Verarbeitungstätigkeiten')}
+      ${stKachel(VVT.filter(v=>(v.status||'')==='aktiv').length,'aktiv')}
+      ${stKachel(komplett+' / '+VVT.length,'Kette vollständig','Besonderheiten bis TOM')}</div>
+    <div class="st-raster">
+      ${stVerteilung('Status', status, {modul:'vvt', feld:'status'})}
+      ${stVerteilung('Abgeleitete Schutzstufe', stufe, {cls:w=>({C:'warn',D:'err',E:'err','—':'err'})[w]||''})}
+      ${stVerteilung('Verantwortliche OE (Top 10)', jeOE.slice(0,10), {modul:'vvt', feld:'oe', label:oeName,
+         rest:rest?`<div class="st-rest">+ ${rest} weitere in ${jeOE.length-10} Einheiten</div>`:''})}
+    </div>
+    ${stPruefungen('vvt', dq&&dq.vvt, VVT.length, x=>`${x.uid} ${x.titel}`)}`;
+}
+
+/* Referenzprüfung einer VVT: was im Bestand fehlt, namentlich */
+function vvtVerwaist(id){
+  if(!ROH) return [];
+  const v=ROH.vvt.find(x=>x.id===id); if(!v) return [];
+  const p=new Set(ROH.prozesse.map(x=>x.id)), d=new Set(ROH.daten.map(x=>x.id)), o=new Set(ROH.orga.map(x=>x.id));
+  const ids=l=>(l||[]).map(e=>typeof e==='string'?e:(e&&e.id)).filter(Boolean);
+  return [
+    ...ids(v.prozesse).filter(x=>!p.has(x)).map(x=>['Prozess',x]),
+    ...ids(v.datenspeicher).filter(x=>!d.has(x)).map(x=>['Datenspeicher',x]),
+    ...(v.organisationseinheit&&!o.has(v.organisationseinheit)?[['OE',v.organisationseinheit]]:[]),
+  ];
 }
 
 /* ── Organisationsangaben pflegen (koos.yaml, PUT api/config/organisation) ── */

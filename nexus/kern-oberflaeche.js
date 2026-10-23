@@ -41,7 +41,7 @@ const S = {
   graphKat:'', graphSort:'refs', graphNurSel:true, graphSel:null,
   vSicht:'proc-vvt', vAmt:'',
   filter:{prozesse:'', datenspeicher:'', vvt:'', regelungen:'', organisation:''},
-  lfilter:{prozesse:null, datenspeicher:null, regelungen:null},   // Listenfilter aus den Startseiten (stammdaten-start.js)
+  lfilter:{prozesse:null, datenspeicher:null, regelungen:null, vvt:null},   // Listenfilter aus den Startseiten (stammdaten-start.js)
   limit:{prozesse:120, datenspeicher:120, vvt:120, tomListe:60},
   verlauf:[],
   threads:[],

@@ -83,8 +83,35 @@ const PFLEGE = {
       {id:'body',                  label:'Volltext / Anmerkungen', typ:'textarea'},
     ],
   },
+  /* VVT nach Art. 30 DSGVO (Stufe 3). Die Kennung ist vvt-<UID>; die UID
+     schreibt der Server nur bei der Neuanlage (vvt_to_md_merge). Der
+     Markdown-Teil der Datei (Abgrenzungen, Hinweise) bleibt unverändert —
+     ihn pflegt die Maske nicht. kontextprofil und die Belege an den
+     Datenspeichern bleiben ebenfalls stehen. */
+  vvt: {
+    label:'Verarbeitungstätigkeit', modul:'vvt', idPraefix:'vvt-', idLabel:'UID', api:'api/vvt', ordner:'vvt',
+    roh:()=>ROH.vvt, pfad:id=>`vvt/${id}.md`,
+    name:r=>r.titel,
+    felder:[
+      {id:'titel',                        label:'Bezeichnung der Verarbeitungstätigkeit', typ:'text', pflicht:true},
+      {id:'status',                       label:'Status',                          typ:'select', vokabular:'vvtStatus', pflicht:true},
+      {id:'organisationseinheit',         label:'Verantwortliche OE',              typ:'oe-select', pflicht:true},
+      {id:'zweck',                        label:'Zweck der Verarbeitung',          typ:'textarea', pflicht:true},
+      {id:'rechtsgrundlage',              label:'Rechtsgrundlage',                 typ:'textarea'},
+      {id:'kategorien_betroffener',       label:'Kategorien betroffener Personen', typ:'textarea'},
+      {id:'kategorien_daten',             label:'Kategorien personenbezogener Daten', typ:'textarea'},
+      {id:'empfaenger',                   label:'Empfänger',                       typ:'textarea'},
+      {id:'transfer_drittland',           label:'Übermittlung in Drittländer',     typ:'textarea'},
+      {id:'loeschfrist',                  label:'Löschfristen',                    typ:'textarea'},
+      {id:'software_verarbeitungsmittel', label:'Software / Verarbeitungsmittel',  typ:'text'},
+      {id:'leika_id',                     label:'LeiKa-ID',                        typ:'text'},
+      {id:'ozg_id',                       label:'OZG-ID',                          typ:'text'},
+      {id:'prozesse',                     label:'Verknüpfte Prozesse',             typ:'multi-prozesse'},
+      {id:'datenspeicher',                label:'Datenspeicher',                   typ:'multi-daten', hinweis:'Aus ihnen leitet sich die Schutzstufe der VVT ab (Maximumprinzip, Richtlinie Datenklassifizierung 4.2)'},
+    ],
+  },
 };
-const PFLEGE_AUSWAHL = {oe:'organisation', prozess:'prozesse', daten:'datenspeicher', regelung:'regelungen'};
+const PFLEGE_AUSWAHL = {oe:'organisation', prozess:'prozesse', daten:'datenspeicher', regelung:'regelungen', vvt:'vvt'};
 
 /* Wertelisten. Die drei Datenart-Listen stehen hier wie in index.html; die
    übrigen kommen ausschließlich aus koos.yaml über api/config (E5) — ohne
@@ -98,7 +125,11 @@ function pflegeVokabular(name){
   };
   if(fest[name]) return fest[name];
   const v=(SITZUNG.vokabular||{})[name];
-  return Array.isArray(v) ? v : v ? Object.keys(v) : null;
+  if(v) return Array.isArray(v) ? v : Object.keys(v);
+  /* koos.yaml führt (23.10.2026) keine Liste für den VVT-Status; im Bestand
+     steht nur „aktiv“. Bis sie dort steht, gilt diese — wie prozessStatus. */
+  if(name==='vvtStatus') return ['aktiv','entwurf','inaktiv'];
+  return null;
 }
 
 /* ── Rechte ────────────────────────────────────────────────────────── */
@@ -187,12 +218,15 @@ function pfFeldHtml(feld){
         <button type="button" class="btn klein" data-pf-zeile="${fid}">${knopf}</button></div>`;
       break;
     }
-    case 'multi-daten':
+    case 'multi-daten': case 'multi-prozesse': {
+      const [liste,wort]=feld.typ==='multi-daten' ? [ROH.daten,'Datenarten'] : [ROH.prozesse,'Prozesse'];
+      const nm=x=>x.name||x.titel||x.id;
       input=`<div class="pf-checks-wrap">
-        <input type="search" class="pf-input pf-checks-filter" placeholder="Datenarten filtern …" data-pf-filter="${fid}">
-        <div class="pf-checks" id="${fid}">${ROH.daten.map(d=>`<label class="pf-check" data-name="${esc((d.name||'').toLowerCase())}">
-          <input type="checkbox" value="${esc(d.id)}"> ${esc(d.name||d.id)}</label>`).join('')}</div></div>`;
+        <input type="search" class="pf-input pf-checks-filter" placeholder="${wort} filtern … (angehakte bleiben sichtbar)" data-pf-filter="${fid}">
+        <div class="pf-checks" id="${fid}">${liste.map(d=>`<label class="pf-check" data-name="${esc((nm(d)+' '+d.id).toLowerCase())}">
+          <input type="checkbox" value="${esc(d.id)}"> ${esc(nm(d))}</label>`).join('')}</div></div>`;
       break;
+    }
   }
   return `<div class="pf-gruppe">
     <label class="pf-label" for="${fid}">${esc(feld.label)}${feld.pflicht?'<span class="pf-pflicht"> *</span>':''}</label>
@@ -298,13 +332,14 @@ function pfBefuellen(ds, felder, wurzel){
         val.forEach(t=>pfZeile(el,{text:t}));
         break;
       case 'list-rechtsgrundlage': case 'list-oe-aufgabe': if(Array.isArray(val)) val.forEach(v=>pfZeile(el,v)); break;
-      case 'multi-daten':
+      case 'multi-daten': case 'multi-prozesse':
         if(!Array.isArray(val)) break;
         val.forEach(id=>{
           let cb=[...el.querySelectorAll('input')].find(i=>i.value===id);
           /* Verweis auf eine Datenart, die es nicht gibt: als markierte,
              angehakte Zeile vorn einfügen — sonst ginge er beim Speichern
-             still verloren (proc-beschaeftigungsduldung-beantragen). */
+             still verloren (proc-beschaeftigungsduldung-beantragen). Gilt
+             ebenso für Prozesse in der VVT. */
           if(!cb){
             const l=document.createElement('label');
             l.className='pf-check pf-fehler-text'; l.dataset.name=id;
@@ -328,11 +363,17 @@ function pfBeanstandungen(wurzel){
 function pfLesen(wurzel){
   const def=PFLEGE[PF.typ];
   const daten={id:PF.edit?PF.edit.id:def.idPraefix+wurzel.querySelector('#pf-id').value.trim()};
+  if(PF.typ==='vvt' && !PF.edit) daten.uid=wurzel.querySelector('#pf-id').value.trim();
   def.felder.forEach(feld=>{
     const el=wurzel.querySelector(`#pf-${feld.id}`); if(!el || el.dataset.unveraendert) return;
     switch(feld.typ){
-      case 'text': case 'textarea': case 'select': case 'oe-select': case 'oe-select-null': case 'reg-select-null':
-        daten[feld.id]=el.value.trim(); break;
+      case 'text': case 'textarea': case 'select': case 'oe-select': case 'oe-select-null': case 'reg-select-null': {
+        const w=el.value.trim(), alt=PF.edit?PF.edit[feld.id]:undefined;
+        /* Steht im Bestand eine Zahl (leika_id: 99050017) und ist der Text
+           unverändert, geht die Zahl zurück — sonst würde aus ihr Text. */
+        daten[feld.id]=(alt!=null && typeof alt!=='string' && String(alt)===w) ? alt : w;
+        break;
+      }
       case 'list-text':
         daten[feld.id]=[...el.querySelectorAll('.pf-z-text')].map(i=>i.value.trim()).filter(Boolean); break;
       case 'list-rechtsgrundlage':
@@ -354,8 +395,15 @@ function pfLesen(wurzel){
           return e;
         }).filter(b=>b.einheit||b.rolle);
         break;
-      case 'multi-daten':
-        daten[feld.id]=[...el.querySelectorAll('input:checked')].map(i=>i.value); break;
+      case 'multi-daten': case 'multi-prozesse': {
+        /* Reihenfolge der Datei erhalten, neu Angehakte hinten anfügen. Die
+           Liste der Maske ist alphabetisch; ohne das würde jede VVT beim
+           Speichern umsortiert (121 von 269 im Rundlauf, 23.10.2026). */
+        const gewaehlt=[...el.querySelectorAll('input:checked')].map(i=>i.value);
+        const alt=(PF.edit&&Array.isArray(PF.edit[feld.id]))?PF.edit[feld.id]:[];
+        daten[feld.id]=[...alt.filter(id=>gewaehlt.includes(id)), ...gewaehlt.filter(id=>!alt.includes(id))];
+        break;
+      }
     }
   });
   if(PF.typ==='prozess'){
@@ -393,10 +441,10 @@ function pfMaske(typ, id){
   const roh=id ? def.roh().find(r=>r.id===id) : null;
   if(id && !roh){ toast('Eintrag nicht gefunden'); return; }
   PF.typ=typ; PF.edit=roh ? pfNormalisieren(typ, roh) : null; PF.bodyOffen=false;
-  const idFeld=`<div class="pf-gruppe"><label class="pf-label" for="pf-id">Kennung${roh?'':'<span class="pf-pflicht"> *</span>'}</label>
+  const idFeld=`<div class="pf-gruppe"><label class="pf-label" for="pf-id">${def.idLabel||'Kennung'}${roh?'':'<span class="pf-pflicht"> *</span>'}</label>
     <div class="pf-id"><span>${esc(def.idPraefix)}</span>
-      <input type="text" id="pf-id" class="pf-input"${roh?` value="${esc(roh.id.slice(def.idPraefix.length))}" disabled`:' placeholder="kurzname-mit-bindestrichen" autocomplete="off"'}></div>
-    <div class="pf-hinweis">${roh?'Die Kennung bleibt fest — andere Einträge verweisen darauf.':'Wird aus der Bezeichnung vorgeschlagen. Nach dem Anlegen nicht mehr änderbar.'}</div></div>`;
+      <input type="text" id="pf-id" class="pf-input"${roh?` value="${esc(roh.id.slice(def.idPraefix.length))}" disabled`:` placeholder="${typ==='vvt'?'Amt und laufende Nummer, z. B. 33-012':'kurzname-mit-bindestrichen'}" autocomplete="off"`}></div>
+    <div class="pf-hinweis">${roh?'Die Kennung bleibt fest — andere Einträge verweisen darauf.':typ==='vvt'?'Nummer des Amts und laufende Nummer, mit Bindestrichen. Nach dem Anlegen nicht mehr änderbar.':'Wird aus der Bezeichnung vorgeschlagen. Nach dem Anlegen nicht mehr änderbar.'}</div></div>`;
   const begr=`<div class="pf-gruppe pf-begruendung"><label class="pf-label" for="pf-begruendung">Begründung der Änderung</label>
     <textarea id="pf-begruendung" class="pf-input" rows="2" placeholder="Warum wird das geändert? Steht im Änderungsprotokoll."></textarea></div>`;
   const d=pfDialog(roh?`${def.label} bearbeiten`:`${def.label} anlegen`,
@@ -406,7 +454,10 @@ function pfMaske(typ, id){
   const form=d.querySelector('.pf-form');
   if(PF.edit) pfBefuellen(PF.edit, def.felder, form);
   if(roh && typ==='prozess') pfBodyNachladen(form.querySelector('#pf-body'), roh.id);
-  if(!roh){
+  PF.ausgang = roh ? JSON.stringify(pfLesen(form)) : null;
+  if(!roh && typ==='vvt'){
+    form.querySelector('#pf-id').focus();
+  }else if(!roh){
     const quelle=form.querySelector(typ==='prozess'?'#pf-titel':'#pf-name');
     const idEl=form.querySelector('#pf-id'); let manuell=false;
     idEl.addEventListener('input',()=>{ manuell=true; });
@@ -417,7 +468,7 @@ function pfMaske(typ, id){
   }
 }
 
-async function pfSpeichern(){
+async function pfSpeichern(force=false){
   const def=PFLEGE[PF.typ];
   const form=document.querySelector('#pf-dialog .pf-form');
   const meld=pfBeanstandungen(form);
@@ -425,9 +476,14 @@ async function pfSpeichern(){
   const neu=!PF.edit;
   if(neu){
     const rest=daten.id.slice(def.idPraefix.length);
-    if(!/^[a-z0-9][a-z0-9-]{0,120}$/.test(rest)) meld.push('Kennung: nur Kleinbuchstaben, Ziffern und Bindestriche');
+    if(PF.typ==='vvt' ? !/^\d+(-\d+)+$/.test(rest) : !/^[a-z0-9][a-z0-9-]{0,120}$/.test(rest))
+      meld.push(PF.typ==='vvt' ? 'UID: Ziffern mit Bindestrichen, z. B. 33-012' : 'Kennung: nur Kleinbuchstaben, Ziffern und Bindestriche');
     else if(def.roh().some(r=>r.id===daten.id)) meld.push(`Kennung ${daten.id} ist schon vergeben`);
   }
+  /* VVT: Stand nur setzen, wenn sich wirklich etwas ändert — sonst entstünde
+     bei jedem Speichern ohne Änderung ein Commit. */
+  if(PF.typ==='vvt' && (neu || JSON.stringify(daten)!==PF.ausgang))
+    daten.letzte_aktualisierung=new Date().toISOString().slice(0,10);
   def.felder.filter(f=>f.pflicht).forEach(f=>{
     const w=daten[f.id];
     if(w===undefined||w==='') meld.push(`„${f.label}“ fehlt`);
@@ -447,9 +503,22 @@ async function pfSpeichern(){
         return liste;
       }, begruendung);
     }else{
-      const r=await fetch(`${def.api}/${encodeURIComponent(daten.id)}`,{
+      const r=await fetch(`${def.api}/${encodeURIComponent(daten.id)}${force?'?force=true':''}`,{
         method:'PUT', headers:{'Content-Type':'application/json'},
         body:JSON.stringify(begruendung?{...daten,_begruendung:begruendung}:daten)});
+      if(r.status===422 && PF.typ==='vvt'){
+        /* Der Server lehnt verwaiste Referenzen ab (ADR 001). Sie können aus
+           dem Bestand stammen; dann darf bewusst trotzdem gespeichert werden. */
+        const d=(await r.json().catch(()=>({}))).detail||{};
+        const liste=[...(d.verwaiste_prozesse||[]),...(d.verwaiste_datenspeicher||[])];
+        if(liste.length){
+          knopf.disabled=false; knopf.textContent='Speichern';
+          pfMeldung(`Verwaiste Referenzen — gibt es im Bestand nicht: ${liste.join(', ')}. Entfernen oder bewusst trotzdem speichern.`);
+          if(!document.querySelector('#pf-dialog [data-pf="speichern-force"]'))
+            knopf.insertAdjacentHTML('beforebegin','<button class="btn pf-gefahr" data-pf="speichern-force">Trotzdem speichern</button>');
+          return;
+        }
+      }
       if(!r.ok) throw new Error(await pfFehlertext(r));
       antwort=await r.json();
     }
@@ -526,10 +595,17 @@ function pfLoeschenFragen(typ, id){
     return;
   }
   PF.typ=typ; PF.edit={id};
+  /* Zur VVT gehören die Dateien der Datenschutzkette (bes-, risiko-, tom- …
+     und baseline- je VVT). Der Server löscht sie im selben Commit mit;
+     Rückgängig holt VVT und Kette zusammen zurück. */
+  const kette = typ==='vvt' ? KETTE_ZWEIGE.filter(z=>K[z]&&K[z][id]) : [];
   pfDialog(`${def.label} löschen`,
     `<p class="pf-text"><b>${esc(def.name(roh))}</b> <code>${esc(id)}</code> wird gelöscht.
        Kein anderer Eintrag verweist darauf. Die Löschung ist ein eigener Commit und lässt sich über
        <i>Verlauf → Rückgängig</i> wiederherstellen.</p>
+     ${typ==='vvt'?`<div class="hinweis warn" style="margin-bottom:12px">Mit der VVT werden auch ihre Dateien der
+       Datenschutzkette gelöscht${kette.length?` (${kette.map(esc).join(', ')} und die Baseline)`:''} — im selben Commit,
+       damit nichts verwaist. Rückgängig stellt beides wieder her.</div>`:''}
      <div class="pf-gruppe pf-begruendung"><label class="pf-label" for="pf-begruendung">Begründung</label>
        <textarea id="pf-begruendung" class="pf-input" rows="2" placeholder="Warum wird der Eintrag gelöscht?"></textarea></div>`,
     `<button class="btn" data-pf="schliessen">Abbrechen</button>
@@ -694,6 +770,7 @@ document.addEventListener('click', e=>{
     'neu':        ()=>darfPflegen() && pfMaske(a),
     'bearbeiten': ()=>darfPflegen() && pfMaske(a,b),
     'speichern':  ()=>pfSpeichern(),
+    'speichern-force': ()=>pfSpeichern(true),
     'loeschen':   ()=>darfPflegen() && pfLoeschenFragen(a,b),
     'loeschen-ok':()=>pfLoeschen(),
     'verlauf':    ()=>pfVerlauf(a,b),
