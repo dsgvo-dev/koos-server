@@ -11,13 +11,14 @@ import io
 import re
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from fastapi.responses import JSONResponse
 import yaml
 
 import config
 from services import parser, git_service
+from services.begruendung import begruendung_lesen
 
 router = APIRouter(prefix="/api/config", tags=["Konfiguration"])
 
@@ -108,7 +109,7 @@ def _org_block_grenzen(zeilen: list[str]) -> tuple[int, int]:
 
 
 @router.put("/organisation", summary="Organisation in koos.yaml ändern")
-def put_organisation(org: Organisation) -> dict:
+async def put_organisation(org: Organisation, request: Request) -> dict:
     datei = config.DATA_DIR / "koos.yaml"
     if not datei.exists():
         raise HTTPException(404, detail="koos.yaml nicht gefunden")
@@ -151,7 +152,8 @@ def put_organisation(org: Organisation) -> dict:
     if neuer_text == text:
         return {"ok": True, "gespeichert": False, "organisation": get_config()["organisation"]}
     datei.write_text(neuer_text, encoding="utf-8")
-    git_service.commit([datei], "Organisation geändert")
+    git_service.commit([datei], "Organisation geändert",
+                       begruendung=await begruendung_lesen(request))
     return {"ok": True, "gespeichert": True, "organisation": get_config()["organisation"]}
 
 
