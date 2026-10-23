@@ -96,6 +96,9 @@ function kettenstaendeErmitteln(){
 }
 
 let DATENSTAND_META=null;
+/* Datensätze, wie die API sie liefert — Grundlage der Pflege (pflege.js).
+   Nur im Live-Betrieb gesetzt; ohne Server gibt es nichts zu speichern. */
+let ROH=null;
 function datenUebernehmen(d){
   DATENSTAND_META=d._meta||null;
   OE=d.OE||[]; PROZESSE=d.PROZESSE||[]; SCHRITTE=d.SCHRITTE||[];
@@ -146,9 +149,11 @@ async function datenLaden(){
       fetch('api/kette',OPT).then(ok).catch(()=>null),
     ]);
     ketteAusUebersicht(kette);
+    ROH={orga, prozesse:proz, daten, regelungen:reg, vvt};
     datenUebernehmen(ausApi({orga,proz,daten,reg,vvt,tom,thr}));
     datenstand('live'); alleAnsichtenNeu(); return;
   }catch(e){ /* kein Server – weiter */ }
+  ROH=null;
 
   /* 2) Quelldateien direkt über HTTP — der Datenordner liegt unter der
         ausgelieferten Wurzel, also lassen sich orga.yaml und die

@@ -1,19 +1,14 @@
 /* ── Audit ─────────────────────────────────────────────────────────── */
 function mAudit(){
+  /* Die Liste lädt pflege.js (auditLaden) aus GET /api/audit, sobald das
+     Modul im Dokument steht. Keine Beispielhistorie. */
+  setTimeout(auditLaden);
   return `<div class="start-inner">
     <h2 style="font-size:21px;font-weight:600">Audit-Trail</h2>
     <p style="color:var(--fg-mute);margin:6px 0 22px;font-size:13.5px">
-      Jede Änderung an Stammdaten und VVT erzeugt einen Git-Commit — Rechenschaftspflicht nach Art. 5 Abs. 2 DSGVO.</p>
-    <div class="hinweis warn"><b>Keine Historie geladen.</b> Der Audit-Trail kommt aus
-      <code>GET /api/audit</code> des Nexus-Servers. Im Betrieb ohne Server (Momentaufnahme oder
-      Ordnerzugriff) gibt es hier nichts anzuzeigen — eine Beispielhistorie stünde sonst
-      neben echten Daten und wäre von ihnen nicht zu unterscheiden.</div>
-    <div class="sektion" style="margin-top:22px"><div class="sektion-label">Vorgesehene Endpunkte</div>
-      <table class="tab" style="max-width:760px"><tbody>
-        <tr><td><code>GET /api/audit?n=50</code></td><td style="color:var(--fg-mute)">letzte Commits</td></tr>
-        <tr><td><code>GET /api/audit/{hash}/diff</code></td><td style="color:var(--fg-mute)">Änderung im Detail</td></tr>
-        <tr><td><code>POST /api/audit/{hash}/revert</code></td><td style="color:var(--fg-mute)">rückgängig als neuer Commit</td></tr>
-      </tbody></table></div>
+      Jede Änderung an Stammdaten und VVT erzeugt einen Git-Commit — Rechenschaftspflicht nach Art. 5 Abs. 2 DSGVO.
+      Diff zeigt die Änderung, Rückgängig setzt die Dateien als neuer Commit auf den Stand davor.</p>
+    <div id="audit-liste" style="max-width:1100px"><p class="pf-text">Lädt …</p></div>
   </div>`;
 }
 /* ── Admin ─────────────────────────────────────────────────────────── */
@@ -41,7 +36,7 @@ function mAdmin(){
       <tr><td>Sprachmodell</td><td>${MODELL.art?`<span class="pill ok">${esc({nexus:'Nexus-Server',gateway:'Hermes-Gateway',ollama:'Ollama lokal'}[MODELL.art])}</span> ${MODELL.modelle.map(esc).join(', ')}`:'<span class="pill warn">keines erreichbar</span>'}</td></tr>
       <tr><td>DSMS-Datenbank</td><td><span class="pill unbekannt">nicht angebunden</span> — Besonderheiten, Schwellenwert, Risiko, TOM-Umsetzungsstand</td></tr>
       <tr><td>Nutzerverwaltung</td><td><span class="pill unbekannt">nicht angebunden</span> — Tabelle <code>users</code> der DSMS-Anwendung</td></tr>
-      <tr><td>Git-Audit</td><td><span class="pill unbekannt">nicht angebunden</span> — <code>/api/audit</code></td></tr>
+      <tr><td>Git-Audit</td><td>${ROH?'<span class="pill ok">angebunden</span>':'<span class="pill unbekannt">ohne Server nicht verfügbar</span>'} — <code>/api/audit</code>, siehe Modul Audit</td></tr>
     </tbody></table>
 
     <div class="sektion-label" style="margin-top:30px;max-width:940px">Vorgesehenes Rollenmodell (Entwurf, nicht implementiert)</div>

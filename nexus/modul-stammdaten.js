@@ -185,8 +185,8 @@ function mOrganisation(){
   const vts=VVT.filter(v=>v.oe===sel);
   return `
   <div class="liste">
-    <div class="liste-kopf"><div><p>Organisationseinheiten</p><span>Kommunalverwaltung</span></div>
-      <button class="btn-neu">+ Neu</button></div>
+    <div class="liste-kopf"><div><p>Organisationseinheiten</p><span>${esc(SITZUNG.organisation||'')}</span></div>
+      ${pflegeNeuKnopf('oe')}</div>
     <div class="liste-scroll">${baum(null)}</div>
   </div>
   <div class="detail">
@@ -196,6 +196,7 @@ function mOrganisation(){
     <div class="aktionsleiste" style="margin:0 0 22px;padding:0;border:none">
       <button class="btn klein" data-setkontext="oe:${o.id}">Als Kontext setzen</button>
       <button class="btn klein" data-frage="Welche Verarbeitungstätigkeiten verantwortet ${o.name.replace(/"/g,'')}?">Assistent fragen</button>
+      ${pflegeKnoepfe('oe',o.id)}
     </div>
     ${o.hinweis?`<div class="hinweis">${esc(o.hinweis)}</div>`:''}
     <div class="sektion"><div class="sektion-label">Rollen</div>
@@ -224,7 +225,7 @@ function mProzesse(){
   const g=filtern('prozesse',PROZESSE,x=>x.name+' '+oeName(x.oe)+' '+(x.leika||'')+' '+(x.ozg||''));
   return `
   <div class="liste">
-    <div class="liste-kopf"><div><p>Prozesse</p><span>${g.treffer.length} von ${PROZESSE.length}</span></div><button class="btn-neu">+ Neu</button></div>
+    <div class="liste-kopf"><div><p>Prozesse</p><span>${g.treffer.length} von ${PROZESSE.length}</span></div>${pflegeNeuKnopf('prozess')}</div>
     <div class="liste-suche"><input type="search" placeholder="Prozesse suchen …" data-filter="prozesse" value="${esc(S.filter.prozesse)}"></div>
     <div class="liste-scroll">${g.sichtbar.map(x=>`
       <div class="li${x.id===sel?' active':''}" data-prozess="${x.id}">
@@ -241,6 +242,7 @@ function mProzesse(){
     <div class="aktionsleiste" style="margin:0 0 22px;padding:0;border:none">
       <button class="btn klein" data-setkontext="prozess:${p.id}">Als Kontext setzen</button>
       <button class="btn klein" data-frage="Ist der Prozess ${p.name.replace(/"/g,'')} im VVT abgebildet?">Assistent fragen</button>
+      ${pflegeKnoepfe('prozess',p.id)}
     </div>
     <div class="hinweis" style="margin-top:-6px">Die besonderen Kategorien nach Art. 9 DSGVO sind im Bestand
       <b>kein eigenes Feld</b>. Angezeigt wird nur, ob Name, Datenkategorie oder Schlagworte ein einschlägiges
@@ -297,7 +299,7 @@ function mDatenspeicher(){
   const g=filtern('datenspeicher',DSTORES,x=>x.name+' '+(x.tags||[]).join(' '));
   return `
   <div class="liste">
-    <div class="liste-kopf"><div><p>Datenspeicher</p><span>${g.treffer.length} von ${DSTORES.length}</span></div><button class="btn-neu">+ Neu</button></div>
+    <div class="liste-kopf"><div><p>Datenspeicher</p><span>${g.treffer.length} von ${DSTORES.length}</span></div>${pflegeNeuKnopf('daten')}</div>
     <div class="liste-suche"><input type="search" placeholder="Datenarten suchen …" data-filter="datenspeicher" value="${esc(S.filter.datenspeicher)}"></div>
     <div class="liste-scroll">${g.sichtbar.map(x=>`
       <div class="li${x.id===sel?' active':''}" data-dstore="${x.id}">
@@ -313,6 +315,7 @@ function mDatenspeicher(){
     ${!d?'<div class="leer-hinweis">Datenart auswählen</div>':`
     <h2>${esc(d.name)}</h2>
     <div class="detail-id">${d.id}${d.bereich?' · '+esc(d.bereich):''}</div>
+    <div class="aktionsleiste" style="margin:0 0 22px;padding:0;border:none">${pflegeKnoepfe('daten',d.id)}</div>
     <div class="hinweis">Die Schutzstufe wird gemäß <b>Richtlinie zur Datenklassifizierung</b> (Punkt 4.2)
       ausschließlich hier am Datenspeicher geführt. Verarbeitungstätigkeiten leiten sie nach dem
       Maximumprinzip ab.</div>
@@ -358,7 +361,7 @@ function mRegelungen(){
   const sel=S.auswahl.regelungen, r=regById(sel);
   return `
   <div class="liste">
-    <div class="liste-kopf"><div><p>Regelungen</p><span>${REGELUNGEN.length} Dokumente</span></div><button class="btn-neu">+ Neu</button></div>
+    <div class="liste-kopf"><div><p>Regelungen</p><span>${REGELUNGEN.length} Dokumente</span></div>${pflegeNeuKnopf('regelung')}</div>
     <div class="liste-scroll">${REGELUNGEN.map(x=>`
       <div class="li${x.id===sel?' active':''}" data-regelung="${x.id}">
         <div class="li-txt"><div class="li-name">${esc(x.name)}</div>
@@ -369,6 +372,7 @@ function mRegelungen(){
     ${!r?'<div class="leer-hinweis">Regelung auswählen</div>':`
     <h2>${esc(r.name)}</h2>
     <div class="detail-id">${r.id} · ${esc(r.typ||'')} · Stand ${esc(r.stand||'')} · federführend ${esc(oeName(r.oe))}${r.status?' · '+esc(r.status):''}</div>
+    <div class="aktionsleiste" style="margin:0 0 22px;padding:0;border:none">${pflegeKnoepfe('regelung',r.id)}</div>
     ${r.gremium?`<div class="sektion"><div class="sektion-label">Entscheidendes Gremium</div>
       <div class="feld-wert">${esc(r.gremium)}</div></div>`:''}
     ${r.kontext?`<div class="sektion"><div class="sektion-label">Kontext</div>
